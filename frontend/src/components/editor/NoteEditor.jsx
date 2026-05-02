@@ -2,13 +2,26 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { uploadNoteImage } from "../../lib/api";
 import { parseChecklistLine } from "../../lib/markdown/checklist";
 import { renderMarkdown } from "../../lib/markdown/render.jsx";
-import { findMarkdownTableStartLine, formatTableRow, isTableSeparator, splitTableRow } from "../../lib/markdown/table";
+import {
+  findMarkdownTableStartLine,
+  formatTableRow,
+  isTableSeparator,
+  splitTableRow,
+} from "../../lib/markdown/table";
 import { getErrorMessage } from "../../lib/utils/error";
 import { normalizeUrl } from "../../lib/utils/url";
 import { FormatToolbarIcon, Icon } from "../Icon";
 import { TagsInput } from "../tags/TagsInput";
 
-export function NoteEditor({ note, onSave, onCancel, isSaving, onNotify, t, theme }) {
+export function NoteEditor({
+  note,
+  onSave,
+  onCancel,
+  isSaving,
+  onNotify,
+  t,
+  theme,
+}) {
   const [title, setTitle] = useState(note?.title || "");
   const [content, setContent] = useState(note?.content || "");
   const [tags, setTags] = useState(note?.tags || []);
@@ -41,9 +54,9 @@ export function NoteEditor({ note, onSave, onCancel, isSaving, onNotify, t, them
     draftTimer.current = setTimeout(() => {
       // Save draft to localStorage
       const draft = {
-        title: title || '',
-        content: content || '',
-        tags: tags || []
+        title: title || "",
+        content: content || "",
+        tags: tags || [],
       };
       localStorage.setItem(`note-draft-${note.id}`, JSON.stringify(draft));
     }, 2000);
@@ -69,13 +82,13 @@ export function NoteEditor({ note, onSave, onCancel, isSaving, onNotify, t, them
         if (!title && !content && tags.length === 0) {
           // Use useState setter functions with a small delay to avoid React hook warnings
           setTimeout(() => {
-            setTitle(draft.title || '');
-            setContent(draft.content || '');
+            setTitle(draft.title || "");
+            setContent(draft.content || "");
             setTags(draft.tags || []);
           }, 0);
         }
       } catch (e) {
-        console.error('Failed to load draft:', e);
+        console.error("Failed to load draft:", e);
       }
     }
   }, [note, title, content, tags]);
@@ -119,12 +132,15 @@ export function NoteEditor({ note, onSave, onCancel, isSaving, onNotify, t, them
       scrollLeft: textarea.scrollLeft ?? 0,
     };
     selectionStateRef.current = nextState;
-    const lineIndex = content.slice(0, nextState.selectionStart).split("\n").length - 1;
+    const lineIndex =
+      content.slice(0, nextState.selectionStart).split("\n").length - 1;
     setCursorLineIndex(lineIndex);
     return nextState;
   };
 
-  const restoreTextareaState = (nextSelectionState = selectionStateRef.current) => {
+  const restoreTextareaState = (
+    nextSelectionState = selectionStateRef.current,
+  ) => {
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         const textarea = textareaRef.current;
@@ -135,7 +151,7 @@ export function NoteEditor({ note, onSave, onCancel, isSaving, onNotify, t, them
         textarea.focus();
         textarea.setSelectionRange(
           nextSelectionState.selectionStart,
-          nextSelectionState.selectionEnd
+          nextSelectionState.selectionEnd,
         );
         textarea.scrollTop = nextSelectionState.scrollTop;
         textarea.scrollLeft = nextSelectionState.scrollLeft;
@@ -173,8 +189,15 @@ export function NoteEditor({ note, onSave, onCancel, isSaving, onNotify, t, them
   };
 
   const handleContentChange = (event) => {
+    const textarea = event.target;
     const nextValue = event.target.value;
-    const { selectionStart, selectionEnd, scrollTop, scrollLeft } = event.target;
+    const { selectionStart, selectionEnd, scrollTop, scrollLeft } = textarea;
+    const distanceFromBottom =
+      textarea.scrollHeight - (scrollTop + textarea.clientHeight);
+    const shouldFollowCaret =
+      distanceFromBottom <= textarea.clientHeight * 0.35 ||
+      selectionStart === nextValue.length;
+
     setContent(nextValue);
     selectionStateRef.current = {
       selectionStart,
@@ -185,12 +208,27 @@ export function NoteEditor({ note, onSave, onCancel, isSaving, onNotify, t, them
     const lineIndex = nextValue.slice(0, selectionStart).split("\n").length - 1;
     setCursorLineIndex(lineIndex);
 
-    restoreTextareaState(selectionStateRef.current);
+    if (shouldFollowCaret) {
+      requestAnimationFrame(() => {
+        const currentTextarea = textareaRef.current;
+        if (!currentTextarea) {
+          return;
+        }
+
+        currentTextarea.scrollTop = currentTextarea.scrollHeight;
+        selectionStateRef.current = {
+          ...selectionStateRef.current,
+          scrollTop: currentTextarea.scrollTop,
+          scrollLeft: currentTextarea.scrollLeft ?? 0,
+        };
+      });
+    }
   };
 
   const handleContentInput = (event) => {
     const textarea = event.target;
-    const distanceFromBottom = textarea.scrollHeight - (textarea.scrollTop + textarea.clientHeight);
+    const distanceFromBottom =
+      textarea.scrollHeight - (textarea.scrollTop + textarea.clientHeight);
     const isNearBottom = distanceFromBottom <= textarea.clientHeight * 0.2;
 
     if (!isNearBottom) {
@@ -217,7 +255,8 @@ export function NoteEditor({ note, onSave, onCancel, isSaving, onNotify, t, them
         return currentContent;
       }
 
-      lines[lineIndex] = `${parsedChecklist.prefix}[${checked ? "x" : " "}] ${parsedChecklist.text}`;
+      lines[lineIndex] =
+        `${parsedChecklist.prefix}[${checked ? "x" : " "}] ${parsedChecklist.text}`;
 
       return lines.join("\n");
     });
@@ -226,7 +265,11 @@ export function NoteEditor({ note, onSave, onCancel, isSaving, onNotify, t, them
   const appendTableRowAtLine = (lineIndex) => {
     setContent((currentContent) => {
       const lines = currentContent.replace(/\r\n/g, "\n").split("\n");
-      if (!lines[lineIndex] || !lines[lineIndex + 1] || !isTableSeparator(lines[lineIndex + 1])) {
+      if (
+        !lines[lineIndex] ||
+        !lines[lineIndex + 1] ||
+        !isTableSeparator(lines[lineIndex + 1])
+      ) {
         return currentContent;
       }
 
@@ -236,13 +279,19 @@ export function NoteEditor({ note, onSave, onCancel, isSaving, onNotify, t, them
       }
 
       let tableEndIndex = lineIndex + 2;
-      while (tableEndIndex < lines.length && lines[tableEndIndex].trim() && lines[tableEndIndex].includes("|")) {
+      while (
+        tableEndIndex < lines.length &&
+        lines[tableEndIndex].trim() &&
+        lines[tableEndIndex].includes("|")
+      ) {
         tableEndIndex += 1;
       }
 
       const bodyRowCount = Math.max(tableEndIndex - (lineIndex + 2), 0);
       const newRow = header.map((_, cellIndex) =>
-        cellIndex === 0 ? `Item ${bodyRowCount + 1}` : `Value ${bodyRowCount + 1}.${cellIndex}`
+        cellIndex === 0
+          ? `Item ${bodyRowCount + 1}`
+          : `Value ${bodyRowCount + 1}.${cellIndex}`,
       );
       lines.splice(tableEndIndex, 0, formatTableRow(newRow));
       return lines.join("\n");
@@ -252,7 +301,11 @@ export function NoteEditor({ note, onSave, onCancel, isSaving, onNotify, t, them
   const appendTableColumnAtLine = (lineIndex) => {
     setContent((currentContent) => {
       const lines = currentContent.replace(/\r\n/g, "\n").split("\n");
-      if (!lines[lineIndex] || !lines[lineIndex + 1] || !isTableSeparator(lines[lineIndex + 1])) {
+      if (
+        !lines[lineIndex] ||
+        !lines[lineIndex + 1] ||
+        !isTableSeparator(lines[lineIndex + 1])
+      ) {
         return currentContent;
       }
 
@@ -262,7 +315,11 @@ export function NoteEditor({ note, onSave, onCancel, isSaving, onNotify, t, them
       }
 
       let tableEndIndex = lineIndex + 2;
-      while (tableEndIndex < lines.length && lines[tableEndIndex].trim() && lines[tableEndIndex].includes("|")) {
+      while (
+        tableEndIndex < lines.length &&
+        lines[tableEndIndex].trim() &&
+        lines[tableEndIndex].includes("|")
+      ) {
         tableEndIndex += 1;
       }
 
@@ -272,10 +329,17 @@ export function NoteEditor({ note, onSave, onCancel, isSaving, onNotify, t, them
       lines[lineIndex] = formatTableRow(updatedHeader);
       lines[lineIndex + 1] = formatTableRow(updatedSeparator);
 
-      for (let rowIndex = lineIndex + 2; rowIndex < tableEndIndex; rowIndex += 1) {
+      for (
+        let rowIndex = lineIndex + 2;
+        rowIndex < tableEndIndex;
+        rowIndex += 1
+      ) {
         const cells = splitTableRow(lines[rowIndex]);
         const bodyIndex = rowIndex - (lineIndex + 1);
-        lines[rowIndex] = formatTableRow([...cells, `Value ${bodyIndex}.${nextColumnIndex}`]);
+        lines[rowIndex] = formatTableRow([
+          ...cells,
+          `Value ${bodyIndex}.${nextColumnIndex}`,
+        ]);
       }
 
       return lines.join("\n");
@@ -288,56 +352,81 @@ export function NoteEditor({ note, onSave, onCancel, isSaving, onNotify, t, them
   }, [content, cursorLineIndex]);
 
   const wrapSelection = (before, after = before, placeholder = "") => {
-    applySelectionUpdate(({ content: currentContent, selectedText, selectionStart, selectionEnd }) => {
-      const value = selectedText || placeholder;
-      const nextValue = `${before}${value}${after}`;
+    applySelectionUpdate(
+      ({
+        content: currentContent,
+        selectedText,
+        selectionStart,
+        selectionEnd,
+      }) => {
+        const value = selectedText || placeholder;
+        const nextValue = `${before}${value}${after}`;
 
-      return {
-        value: `${currentContent.slice(0, selectionStart)}${nextValue}${currentContent.slice(selectionEnd)}`,
-        selectionStart: selectionStart + before.length,
-        selectionEnd: selectionStart + before.length + value.length,
-      };
-    });
+        return {
+          value: `${currentContent.slice(0, selectionStart)}${nextValue}${currentContent.slice(selectionEnd)}`,
+          selectionStart: selectionStart + before.length,
+          selectionEnd: selectionStart + before.length + value.length,
+        };
+      },
+    );
   };
 
   const prefixLines = (prefixFactory) => {
-    applySelectionUpdate(({ content: currentContent, selectionStart, selectionEnd }) => {
-      const blockStart = currentContent.lastIndexOf("\n", Math.max(selectionStart - 1, 0)) + 1;
-      const nextLineBreak = currentContent.indexOf("\n", selectionEnd);
-      const blockEnd = nextLineBreak === -1 ? currentContent.length : nextLineBreak;
-      const selectedBlock = currentContent.slice(blockStart, blockEnd);
-      const lines = selectedBlock.split("\n");
-      const formattedBlock = lines
-        .map((line, lineIndex) => (line.trim() ? prefixFactory(line, lineIndex) : line))
-        .join("\n");
+    applySelectionUpdate(
+      ({ content: currentContent, selectionStart, selectionEnd }) => {
+        const blockStart =
+          currentContent.lastIndexOf("\n", Math.max(selectionStart - 1, 0)) + 1;
+        const nextLineBreak = currentContent.indexOf("\n", selectionEnd);
+        const blockEnd =
+          nextLineBreak === -1 ? currentContent.length : nextLineBreak;
+        const selectedBlock = currentContent.slice(blockStart, blockEnd);
+        const lines = selectedBlock.split("\n");
+        const formattedBlock = lines
+          .map((line, lineIndex) =>
+            line.trim() ? prefixFactory(line, lineIndex) : line,
+          )
+          .join("\n");
 
-      return {
-        value: `${currentContent.slice(0, blockStart)}${formattedBlock}${currentContent.slice(blockEnd)}`,
-        selectionStart: blockStart,
-        selectionEnd: blockStart + formattedBlock.length,
-      };
-    });
+        return {
+          value: `${currentContent.slice(0, blockStart)}${formattedBlock}${currentContent.slice(blockEnd)}`,
+          selectionStart: blockStart,
+          selectionEnd: blockStart + formattedBlock.length,
+        };
+      },
+    );
   };
 
   const insertTemplate = (template) => {
-    applySelectionUpdate(({ content: currentContent, selectedText, selectionStart, selectionEnd }) => {
-      const value = selectedText || template;
-
-      return {
-        value: `${currentContent.slice(0, selectionStart)}${value}${currentContent.slice(selectionEnd)}`,
+    applySelectionUpdate(
+      ({
+        content: currentContent,
+        selectedText,
         selectionStart,
-        selectionEnd: selectionStart + value.length,
-      };
-    });
+        selectionEnd,
+      }) => {
+        const value = selectedText || template;
+
+        return {
+          value: `${currentContent.slice(0, selectionStart)}${value}${currentContent.slice(selectionEnd)}`,
+          selectionStart,
+          selectionEnd: selectionStart + value.length,
+        };
+      },
+    );
   };
 
   const buildTableTemplate = (columnCount, rowCount) => {
-    const header = Array.from({ length: columnCount }, (_, index) => `Column ${index + 1}`);
+    const header = Array.from(
+      { length: columnCount },
+      (_, index) => `Column ${index + 1}`,
+    );
     const separator = Array.from({ length: columnCount }, () => "---");
     const rows = Array.from({ length: rowCount }, (_, rowIndex) =>
       Array.from({ length: columnCount }, (_, columnIndex) =>
-        columnIndex === 0 ? `Item ${rowIndex + 1}` : `Value ${rowIndex + 1}.${columnIndex}`
-      )
+        columnIndex === 0
+          ? `Item ${rowIndex + 1}`
+          : `Value ${rowIndex + 1}.${columnIndex}`,
+      ),
     );
 
     return [
@@ -348,11 +437,31 @@ export function NoteEditor({ note, onSave, onCancel, isSaving, onNotify, t, them
   };
 
   const tableOptions = [
-    { label: "Simple table", type: "table", template: buildTableTemplate(2, 2) },
-    { label: "3 columns", type: "table3x2", template: buildTableTemplate(3, 2) },
-    { label: "4 columns", type: "table4x2", template: buildTableTemplate(4, 2) },
-    { label: "More rows", type: "table2x4", template: buildTableTemplate(2, 4) },
-    { label: "Big table", type: "table4x4", template: buildTableTemplate(4, 4) },
+    {
+      label: "Simple table",
+      type: "table",
+      template: buildTableTemplate(2, 2),
+    },
+    {
+      label: "3 columns",
+      type: "table3x2",
+      template: buildTableTemplate(3, 2),
+    },
+    {
+      label: "4 columns",
+      type: "table4x2",
+      template: buildTableTemplate(4, 2),
+    },
+    {
+      label: "More rows",
+      type: "table2x4",
+      template: buildTableTemplate(2, 4),
+    },
+    {
+      label: "Big table",
+      type: "table4x4",
+      template: buildTableTemplate(4, 4),
+    },
     {
       label: "Comparison table",
       type: "tableCompare",
@@ -379,6 +488,7 @@ export function NoteEditor({ note, onSave, onCancel, isSaving, onNotify, t, them
       { label: "Table", type: "tableMenu" },
       { label: "Link", type: "link" },
       { label: t.insertImage, type: "image" },
+      { label: "Divider", type: "hr" },
     ],
   ];
 
@@ -389,21 +499,29 @@ export function NoteEditor({ note, onSave, onCancel, isSaving, onNotify, t, them
   };
 
   const insertUploadedImageMarkdown = (markdown) => {
-    applySelectionUpdate(({ content: currentContent, selectionStart, selectionEnd }) => {
-      const needsLeadingBreak = selectionStart > 0 && !currentContent.slice(0, selectionStart).endsWith("\n");
-      const needsTrailingBreak = selectionEnd < currentContent.length && !currentContent.slice(selectionEnd).startsWith("\n");
-      const value = `${needsLeadingBreak ? "\n" : ""}${markdown}${needsTrailingBreak ? "\n" : ""}`;
+    applySelectionUpdate(
+      ({ content: currentContent, selectionStart, selectionEnd }) => {
+        const needsLeadingBreak =
+          selectionStart > 0 &&
+          !currentContent.slice(0, selectionStart).endsWith("\n");
+        const needsTrailingBreak =
+          selectionEnd < currentContent.length &&
+          !currentContent.slice(selectionEnd).startsWith("\n");
+        const value = `${needsLeadingBreak ? "\n" : ""}${markdown}${needsTrailingBreak ? "\n" : ""}`;
 
-      return {
-        value: `${currentContent.slice(0, selectionStart)}${value}${currentContent.slice(selectionEnd)}`,
-        selectionStart: selectionStart + value.length,
-        selectionEnd: selectionStart + value.length,
-      };
-    });
+        return {
+          value: `${currentContent.slice(0, selectionStart)}${value}${currentContent.slice(selectionEnd)}`,
+          selectionStart: selectionStart + value.length,
+          selectionEnd: selectionStart + value.length,
+        };
+      },
+    );
   };
 
   const handleImageFiles = async (fileList) => {
-    const imageFiles = Array.from(fileList || []).filter((file) => file.type.startsWith("image/"));
+    const imageFiles = Array.from(fileList || []).filter((file) =>
+      file.type.startsWith("image/"),
+    );
     if (imageFiles.length === 0) {
       return;
     }
@@ -456,10 +574,15 @@ export function NoteEditor({ note, onSave, onCancel, isSaving, onNotify, t, them
         prefixLines((line) => `- ${line.replace(/^[-*]\s+/, "")}`);
         break;
       case "numberedList":
-        prefixLines((line, index) => `${index + 1}. ${line.replace(/^\d+\.\s+/, "")}`);
+        prefixLines(
+          (line, index) => `${index + 1}. ${line.replace(/^\d+\.\s+/, "")}`,
+        );
         break;
       case "checklist":
-        prefixLines((line) => `- [ ] ${line.replace(/^((?:[-*]\s+)?)\[(?: |x|X)\]\s+/, "").replace(/^[-*]\s+/, "")}`);
+        prefixLines(
+          (line) =>
+            `- [ ] ${line.replace(/^((?:[-*]\s+)?)\[(?: |x|X)\]\s+/, "").replace(/^[-*]\s+/, "")}`,
+        );
         break;
       case "quote":
         prefixLines((line) => `> ${line.replace(/^>\s?/, "")}`);
@@ -476,7 +599,9 @@ export function NoteEditor({ note, onSave, onCancel, isSaving, onNotify, t, them
       case "table2x4":
       case "table4x4":
       case "tableCompare": {
-        const selectedOption = tableOptions.find((option) => option.type === type);
+        const selectedOption = tableOptions.find(
+          (option) => option.type === type,
+        );
         if (selectedOption) {
           insertTemplate(selectedOption.template);
         }
@@ -485,6 +610,23 @@ export function NoteEditor({ note, onSave, onCancel, isSaving, onNotify, t, them
       }
       case "link":
         wrapSelection("[", "](https://example.com)", "link text");
+        break;
+      case "hr":
+        applySelectionUpdate(
+          ({ content: currentContent, selectionStart, selectionEnd }) => {
+            const before = currentContent.slice(0, selectionStart);
+            const after = currentContent.slice(selectionEnd);
+            const needsLeading = before.length > 0 && !before.endsWith("\n");
+            const needsTrailing = after.length > 0 && !after.startsWith("\n");
+            const hr = `${needsLeading ? "\n" : ""}---${needsTrailing ? "\n" : ""}`;
+            const insertPos = selectionStart + (needsLeading ? 1 : 0);
+            return {
+              value: `${before}${hr}${after}`,
+              selectionStart: insertPos + 3,
+              selectionEnd: insertPos + 3,
+            };
+          },
+        );
         break;
       case "image":
         imageInputRef.current?.click();
@@ -517,24 +659,30 @@ export function NoteEditor({ note, onSave, onCancel, isSaving, onNotify, t, them
       />
       <div className="editor-shell">
         <div className="editor-top">
-          <div className="editor-top-copy">
-            <h2>{note ? t.noteEditorEdit : t.noteEditorNew}</h2>
-          </div>
           <div className="editor-toolbar-stack">
             <div className="editor-format-label">{t.markdownTools}</div>
             <div className="editor-toolbar-row">
               <div className="editor-format-toolbar">
                 <div className="editor-format-chips">
                   {formattingGroups.map((group, groupIndex) => (
-                    <div key={`format-group-${groupIndex}`} className="editor-format-group">
-                      {group.map((action) => (
+                    <div
+                      key={`format-group-${groupIndex}`}
+                      className="editor-format-group"
+                    >
+                      {group.map((action) =>
                         action.type === "tableMenu" ? (
-                          <div key={action.label} className="format-menu" ref={tableMenuRef}>
+                          <div
+                            key={action.label}
+                            className="format-menu"
+                            ref={tableMenuRef}
+                          >
                             <button
                               type="button"
                               className="format-chip format-menu-button"
                               onMouseDown={preventToolbarMouseDown}
-                              onClick={() => handleFormattingAction(action.type)}
+                              onClick={() =>
+                                handleFormattingAction(action.type)
+                              }
                               disabled={editorMode !== "write"}
                               title={action.label}
                               aria-label={action.label}
@@ -545,20 +693,28 @@ export function NoteEditor({ note, onSave, onCancel, isSaving, onNotify, t, them
                               <span className="format-menu-caret">▾</span>
                             </button>
                             {isTableMenuOpen ? (
-                              <div className="format-menu-panel" role="menu" aria-label="Table options">
+                              <div
+                                className="format-menu-panel"
+                                role="menu"
+                                aria-label="Table options"
+                              >
                                 {tableOptions.map((option) => (
                                   <button
                                     key={option.type}
                                     type="button"
                                     className="format-menu-option"
                                     onMouseDown={preventToolbarMouseDown}
-                                    onClick={() => handleFormattingAction(option.type)}
+                                    onClick={() =>
+                                      handleFormattingAction(option.type)
+                                    }
                                     role="menuitem"
                                   >
                                     <span className="format-menu-option-icon">
                                       <FormatToolbarIcon type="table" />
                                     </span>
-                                    <span className="format-menu-option-label">{option.label}</span>
+                                    <span className="format-menu-option-label">
+                                      {option.label}
+                                    </span>
                                   </button>
                                 ))}
                               </div>
@@ -571,14 +727,16 @@ export function NoteEditor({ note, onSave, onCancel, isSaving, onNotify, t, them
                             className="format-chip"
                             onMouseDown={preventToolbarMouseDown}
                             onClick={() => handleFormattingAction(action.type)}
-                            disabled={editorMode !== "write" || isUploadingImage}
+                            disabled={
+                              editorMode !== "write" || isUploadingImage
+                            }
                             title={action.label}
                             aria-label={action.label}
                           >
                             <FormatToolbarIcon type={action.type} />
                           </button>
-                        )
-                      ))}
+                        ),
+                      )}
                     </div>
                   ))}
                 </div>
@@ -674,12 +832,21 @@ export function NoteEditor({ note, onSave, onCancel, isSaving, onNotify, t, them
                 onAppendTableColumn: appendTableColumnAtLine,
                 readOnlyChecklist: false,
                 t,
-              }) || <span style={{ color: "var(--text-muted)" }}>{t.noteEmpty}</span>}
+              }) || (
+                <span style={{ color: "var(--text-muted)" }}>
+                  {t.noteEmpty}
+                </span>
+              )}
             </div>
           )}
         </div>
         <div className="editor-actions">
-          <button type="button" className="btn-save" onClick={handleSave} disabled={isSaving}>
+          <button
+            type="button"
+            className="btn-save"
+            onClick={handleSave}
+            disabled={isSaving}
+          >
             <Icon name="check" size={15} /> {isSaving ? t.saving : t.save}
           </button>
           <button type="button" className="btn-cancel" onClick={onCancel}>

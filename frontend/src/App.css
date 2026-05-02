@@ -208,8 +208,9 @@ body[data-theme="light"] .search-input:focus {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  max-height: 150px;
+  max-height: 116px;
   overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .tag-filter {
@@ -436,6 +437,30 @@ body[data-theme="light"] .topbar {
   flex: 0 0 auto;
   border-right: none;
   padding-right: 0;
+}
+
+.topbar.topbar-editing {
+  position: relative;
+}
+
+.topbar.topbar-editing .topbar-title-block {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  pointer-events: none;
+  flex: none;
+}
+
+.topbar.topbar-editing .topbar-left {
+  flex: 0 0 auto;
+  border-right: none;
+  padding-right: 0;
+  margin: 0 auto;
+}
+
+.topbar.topbar-editing .topbar-right {
+  margin-left: 0;
 }
 
 .topbar-right {
@@ -1013,6 +1038,13 @@ body[data-theme="light"] .note-view-header .tag-badge {
   min-width: 0;
   flex: 1;
   overflow: hidden;
+  flex-wrap: nowrap;
+  max-height: 26px;
+}
+
+/* hide overflow tags in compact rows */
+.note-tags-row.compact .tag-badge:nth-child(n + 4) {
+  display: none;
 }
 
 .tag-badge,
@@ -1611,10 +1643,11 @@ body[data-theme="light"] .main-list-card {
 
 .main-list-footer {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow: hidden;
 }
 
 .main-list-footer > *,
@@ -1687,11 +1720,12 @@ body[data-theme="light"] .grid-card {
 
 .grid-card-footer {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
   margin-top: auto;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow: hidden;
 }
 
 .grid-card-date {
@@ -1741,10 +1775,7 @@ body[data-theme="light"] .editor-top {
 }
 
 .editor-top-copy h2 {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: 24px;
-  line-height: 1.1;
+  display: none;
 }
 
 .editor-top-copy p {
@@ -1765,11 +1796,11 @@ body[data-theme="light"] .editor-top {
   flex-direction: column;
   gap: 10px;
   width: 100%;
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.02);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  padding: 6px 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .editor-toolbar-row {
@@ -1982,7 +2013,7 @@ body[data-theme="light"] .editor-format-group {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
 }
 
-body[data-theme="light"] .editor-toolbar-stack {
+body[data-theme="light"] .editor-toolbar-stack-DISABLED {
   background: linear-gradient(
     180deg,
     rgba(255, 251, 245, 0.96) 0%,
@@ -2577,14 +2608,11 @@ body[data-theme="light"] .note-hr {
   flex-direction: column;
   gap: 3px;
   margin: 6px 0 10px;
-  min-height: 0;
 }
-
 .rp-list--grid {
   flex: 1;
   overflow: hidden;
 }
-
 .rp-list > * {
   display: flex;
   align-items: baseline;
@@ -2597,13 +2625,11 @@ body[data-theme="light"] .note-hr {
   text-overflow: ellipsis;
   max-width: 100%;
 }
-
 .rp-heading {
   color: var(--text) !important;
   font-weight: 700;
   font-size: 12.5px !important;
 }
-
 .rp-heading-marker {
   display: inline-flex;
   align-items: center;
@@ -2619,7 +2645,6 @@ body[data-theme="light"] .note-hr {
   flex-shrink: 0;
   line-height: 1;
 }
-
 .rp-quote {
   padding-left: 4px;
   border-left: 2px solid var(--accent);
@@ -2648,7 +2673,6 @@ body[data-theme="light"] .note-hr {
 .rp-check {
   gap: 6px !important;
 }
-
 .rp-checkbox {
   display: inline-flex;
   align-items: center;
@@ -2661,7 +2685,6 @@ body[data-theme="light"] .note-hr {
   font-size: 9px;
   opacity: 0.7;
 }
-
 .rp-checkbox.checked {
   border-color: var(--success);
   color: var(--success);
@@ -2671,7 +2694,6 @@ body[data-theme="light"] .note-hr {
   text-decoration: line-through;
   opacity: 0.55;
 }
-
 .rp-badge {
   display: inline-flex;
   align-items: center;
@@ -2686,7 +2708,6 @@ body[data-theme="light"] .note-hr {
   flex-shrink: 0;
   align-self: flex-start;
 }
-
 .rp-badge--code {
   color: var(--accent2, #7c6fcd) !important;
   border-color: rgba(124, 111, 205, 0.22);
@@ -2702,12 +2723,10 @@ body[data-theme="light"] .note-hr {
   border-color: rgba(200, 169, 110, 0.22);
   background: rgba(200, 169, 110, 0.08);
 }
-
 .rp-text {
   gap: 5px !important;
   flex-wrap: nowrap;
 }
-
 .rp-inline-badge {
   display: inline-flex;
   align-items: center;
@@ -2722,7 +2741,6 @@ body[data-theme="light"] .note-hr {
   flex-shrink: 0;
   background: var(--surface3);
 }
-
 .rp-bold {
   font-weight: 900;
   color: var(--text);
@@ -2742,7 +2760,6 @@ body[data-theme="light"] .note-hr {
   opacity: 0.55;
   font-style: italic;
 }
-
 body[data-theme="light"] .rp-heading-marker {
   background: rgba(155, 105, 36, 0.12);
 }
