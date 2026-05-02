@@ -3,6 +3,27 @@ import { formatDate } from "../../lib/utils/date";
 import { getRichPreview } from "../../lib/utils/preview";
 import { getTagColor } from "../../lib/utils/tagColor";
 
+function TagRow({ tags, theme, max = 3 }) {
+  const visible = tags.slice(0, max);
+  const rest = tags.length - max;
+  return (
+    <div className="note-tags-row compact">
+      {visible.map((tag) => {
+        const [background, color] = getTagColor(tag, theme);
+        return (
+          <span key={tag} className="tag-badge" style={{ background, color }}>
+            <Icon name="tag" size={10} />
+            <span className="tag-chip-text" title={tag}>
+              {tag}
+            </span>
+          </span>
+        );
+      })}
+      {rest > 0 && <span className="tag-badge tag-badge--more">+{rest}</span>}
+    </div>
+  );
+}
+
 function RichPreviewBlock({ block }) {
   switch (block.type) {
     case "heading":
@@ -92,23 +113,7 @@ export function NotesGridContent({ notes, onSelectNote, t, language, theme }) {
                 )}
               </div>
               <div className="grid-card-footer">
-                <div className="note-tags-row compact">
-                  {note.tags.map((tag) => {
-                    const [background, color] = getTagColor(tag, theme);
-                    return (
-                      <span
-                        key={tag}
-                        className="tag-badge"
-                        style={{ background, color }}
-                      >
-                        <Icon name="tag" size={10} />
-                        <span className="tag-chip-text" title={tag}>
-                          {tag}
-                        </span>
-                      </span>
-                    );
-                  })}
-                </div>
+                <TagRow tags={note.tags} theme={theme} max={3} />
                 <span className="grid-card-date">
                   {formatDate(note.updated_at || note.created_at, language)}
                 </span>

@@ -1042,11 +1042,6 @@ body[data-theme="light"] .note-view-header .tag-badge {
   max-height: 26px;
 }
 
-/* hide overflow tags in compact rows */
-.note-tags-row.compact .tag-badge:nth-child(n + 4) {
-  display: none;
-}
-
 .tag-badge,
 .tag-removable,
 .tag-filter {
@@ -2587,6 +2582,23 @@ body[data-theme="light"] .login-status.success {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+
+.tag-badge--more {
+  background: var(--surface3) !important;
+  color: var(--text-muted) !important;
+  border-color: var(--border) !important;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  flex-shrink: 0;
+}
+
+body[data-theme="light"] .tag-badge--more {
+  background: rgba(128, 96, 57, 0.08) !important;
+  color: rgba(90, 58, 10, 0.6) !important;
+  border-color: rgba(128, 96, 57, 0.18) !important;
+  box-shadow: none !important;
 }
 
 /* ── Horizontal Rule ── */
