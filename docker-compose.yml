@@ -1,0 +1,93 @@
+services:
+  db:
+    image: postgres:15
+    restart: always
+    environment:
+      POSTGRES_DB: smartnotebook
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d smartnotebook"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  backend:
+    build: ./backend
+    command: >
+      sh -c "python scripts/wait_for_db.py &&
+             python manage.py migrate &&
+             gunicorn smartnotebook.wsgi:application --bind 0.0.0.0:8000"
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      SECRET_KEY: "smartnotebook-dev-secret-key"
+      DEBUG: "True"
+      ALLOWED_HOSTS: "127.0.0.1,localhost,backend"
+      CORS_ALLOW_ALL_ORIGINS: "False"
+      CORS_ALLOWED_ORIGINS: "http://localhost:5173,http://127.0.0.1:5173"
+      DB_HOST: db
+      DB_NAME: smartnotebook
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_PORT: "5432"
+
+  test:
+    build:
+      context: ./backend
+      args:
+        - INSTALL_DEV=true
+    command: >
+      sh -c "python scripts/wait_for_db.py &&
+             python manage.py migrate &&
+             coverage run --source=notes manage.py test notes.tests &&
+             coverage report"
+    volumes:
+      - ./backend:/app
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      SECRET_KEY: "smartnotebook-test-secret-key"
+      USE_SQLITE_FOR_TESTS: "False"
+      DB_HOST: db
+      DB_NAME: smartnotebook
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_PORT: "5432"
+
+  lint:
+    build:
+      context: ./backend
+      args:
+        - INSTALL_DEV=true
+    command: >
+      sh -c "ruff check . && ruff format --check ."
+    volumes:
+      - ./backend:/app
+
+  frontend:
+    image: node:22
+    working_dir: /frontend
+    volumes:
+      - ./frontend:/frontend
+      - frontend_node_modules:/frontend/node_modules
+    command: sh -c "corepack enable && corepack prepare pnpm@latest --activate && pnpm install && pnpm run dev -- --host 0.0.0.0"
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+    environment:
+      VITE_PROXY_TARGET: http://backend:8000
+
+volumes:
+  postgres_data:
+  frontend_node_modules:

@@ -1,0 +1,94 @@
+# ─── Python / Django ──────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg
+*.egg-info/
+dist/
+build/
+*.whl
+*.manifest
+*.spec
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Django
+*.log
+*.pot
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+backend/db.sqlite3
+backend/db.sqlite3-journal
+backend/test_db.sqlite3
+media/
+staticfiles/
+static_root/
+
+# Migrations (keep or ignore — choose one style)
+# Uncomment below to ignore migrations:
+# backend/*/migrations/
+
+# ─── Environment & Secrets ────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+!frontend/.env.example
+
+# ─── Node / React / Vite ─────────────────────────────────────────────────────
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+frontend/.vite/
+.npm
+
+# Cache
+.cache/
+*.tsbuildinfo
+
+# ─── IDE & OS ─────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ─── Testing & Coverage ───────────────────────────────────────────────────────
+.coverage
+backend/.coverage
+htmlcov/
+backend/htmlcov/
+.pytest_cache/
+.mypy_cache/
+coverage.xml
+*.cover
+
+# ─── Jupyter (если используется для анализа TF-IDF) ──────────────────────────
+.ipynb_checkpoints/
+*.ipynb
+
+# ─── Misc ─────────────────────────────────────────────────────────────────────
+*.bak
+*.tmp
+AGENTS.md
+Дипломный проект.md
+диаграмы.md
+дипломный проект.md
+диаграммы.md
+.codex
+backend/.ruff_cache/
+
+# pnpm
+.pnpm-store/
+frontend/.pnpm-store/
+
+package-lock.json
