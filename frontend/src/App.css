@@ -208,7 +208,7 @@ body[data-theme="light"] .search-input:focus {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  max-height: 88px;
+  max-height: 102px;
   overflow-y: auto;
   overflow-x: hidden;
 }
