@@ -1,0 +1,122 @@
+import { Icon } from "../Icon";
+import { formatDate } from "../../lib/utils/date";
+import { getRichPreview } from "../../lib/utils/preview";
+import { getTagColor } from "../../lib/utils/tagColor";
+
+function RichPreviewBlock({ block }) {
+  switch (block.type) {
+    case "heading":
+      return (
+        <span className="rp-heading">
+          <span className="rp-heading-marker">H{block.level}</span>
+          {block.text}
+        </span>
+      );
+    case "quote":
+      return (
+        <span className="rp-quote">
+          <span className="rp-quote-bar" />
+          {block.text}
+        </span>
+      );
+    case "code":
+      return <span className="rp-badge rp-badge--code">{"{ }"} code</span>;
+    case "check":
+      return (
+        <span className="rp-check">
+          <span className={"rp-checkbox" + (block.checked ? " checked" : "")}>
+            {block.checked ? "✓" : ""}
+          </span>
+          <span className={block.checked ? "rp-check-done" : ""}>
+            {block.text}
+          </span>
+        </span>
+      );
+    case "bullet":
+      return (
+        <span className="rp-bullet">
+          <span className="rp-bullet-dot" />
+          {block.text}
+        </span>
+      );
+    case "numbered":
+      return (
+        <span className="rp-bullet">
+          <span className="rp-numbered-dot">·</span>
+          {block.text}
+        </span>
+      );
+    case "image":
+      return <span className="rp-badge rp-badge--media">⬜ image</span>;
+    case "table":
+      return <span className="rp-badge rp-badge--table">⊞ table</span>;
+    case "text":
+      return (
+        <span className="rp-text">
+          {block.hasBold && <span className="rp-inline-badge rp-bold">B</span>}
+          {block.hasItalic && (
+            <span className="rp-inline-badge rp-italic">I</span>
+          )}
+          {block.hasCode && (
+            <span className="rp-inline-badge rp-code">{"<>"}</span>
+          )}
+          {block.text}
+        </span>
+      );
+    default:
+      return null;
+  }
+}
+
+export function NotesListContent({ notes, onSelectNote, t, language, theme }) {
+  return (
+    <div className="notes-main-list">
+      <div className="main-list">
+        {notes.map((note) => {
+          const preview = getRichPreview(note.content, t);
+          return (
+            <button
+              key={note.id}
+              type="button"
+              className="main-list-card"
+              onClick={() => onSelectNote(note.id)}
+            >
+              <div className="main-list-title">{note.title}</div>
+              <div className="rp-list">
+                {preview.length > 0 ? (
+                  preview.map((block, i) => (
+                    <RichPreviewBlock key={i} block={block} />
+                  ))
+                ) : (
+                  <span className="rp-empty">{t.noteEmpty}</span>
+                )}
+              </div>
+              <div className="main-list-footer">
+                <div className="note-tags-row compact">
+                  {note.tags.map((tag) => {
+                    const [background, color] = getTagColor(tag, theme);
+                    return (
+                      <span
+                        key={tag}
+                        className="tag-badge"
+                        style={{ background, color }}
+                      >
+                        <Icon name="tag" size={10} />
+                        <span className="tag-chip-text" title={tag}>
+                          {tag}
+                        </span>
+                      </span>
+                    );
+                  })}
+                </div>
+                <span className="main-list-date">
+                  {formatDate(note.updated_at || note.created_at, language)}
+                </span>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
