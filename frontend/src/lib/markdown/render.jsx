@@ -29,7 +29,9 @@ export function renderMarkdown(content, options = {}) {
   const isQuote = (line) => /^>\s?/.test(line);
   const isHeading = (line) => /^#{1,6}\s+/.test(line);
   const isFence = (line) => /^```/.test(line);
-  const isTableStart = (line, nextLine = "") => line.includes("|") && isTableSeparator(nextLine);
+  const isHr = (line) => /^(-{3,}|\*{3,}|_{3,})\s*$/.test(line.trim());
+  const isTableStart = (line, nextLine = "") =>
+    line.includes("|") && isTableSeparator(nextLine);
   const isBlockBoundary = (line, nextLine = "") =>
     !line.trim() ||
     isFence(line) ||
@@ -38,6 +40,7 @@ export function renderMarkdown(content, options = {}) {
     isBullet(line) ||
     isOrdered(line) ||
     isQuote(line) ||
+    isHr(line) ||
     isTableStart(line, nextLine);
 
   while (index < lines.length) {
@@ -58,8 +61,10 @@ export function renderMarkdown(content, options = {}) {
             className="note-block-image"
             loading="lazy"
           />
-          {standaloneLink.alt ? <figcaption>{standaloneLink.alt}</figcaption> : null}
-        </figure>
+          {standaloneLink.alt ? (
+            <figcaption>{standaloneLink.alt}</figcaption>
+          ) : null}
+        </figure>,
       );
       index += 1;
       continue;
@@ -68,8 +73,12 @@ export function renderMarkdown(content, options = {}) {
     if (standaloneLink?.type === "youtube") {
       blocks.push(
         <div key={`youtube-${blocks.length}`} className="note-media-block">
-          <YouTubePreview url={standaloneLink.url} label={standaloneLink.label} t={t} />
-        </div>
+          <YouTubePreview
+            url={standaloneLink.url}
+            label={standaloneLink.label}
+            t={t}
+          />
+        </div>,
       );
       index += 1;
       continue;
@@ -78,9 +87,19 @@ export function renderMarkdown(content, options = {}) {
     if (standaloneLink?.type === "link") {
       blocks.push(
         <div key={`link-${blocks.length}`} className="note-media-block">
-          <LinkPreviewCard url={standaloneLink.url} label={standaloneLink.label} t={t} />
-        </div>
+          <LinkPreviewCard
+            url={standaloneLink.url}
+            label={standaloneLink.label}
+            t={t}
+          />
+        </div>,
       );
+      index += 1;
+      continue;
+    }
+
+    if (isHr(line)) {
+      blocks.push(<hr key={`hr-${blocks.length}`} className="note-hr" />);
       index += 1;
       continue;
     }
@@ -101,8 +120,10 @@ export function renderMarkdown(content, options = {}) {
 
       blocks.push(
         <pre key={`code-${blocks.length}`}>
-          <code data-language={language || undefined}>{renderHighlightedCode(codeLines.join("\n"), language)}</code>
-        </pre>
+          <code data-language={language || undefined}>
+            {renderHighlightedCode(codeLines.join("\n"), language)}
+          </code>
+        </pre>,
       );
       continue;
     }
@@ -114,7 +135,7 @@ export function renderMarkdown(content, options = {}) {
       blocks.push(
         <TagName key={`heading-${blocks.length}`}>
           {renderInlineMarkdown(headingMatch[2], `heading-${blocks.length}`)}
-        </TagName>
+        </TagName>,
       );
       index += 1;
       continue;
@@ -126,7 +147,11 @@ export function renderMarkdown(content, options = {}) {
       const rows = [];
       index += 2;
 
-      while (index < lines.length && lines[index].trim() && lines[index].includes("|")) {
+      while (
+        index < lines.length &&
+        lines[index].trim() &&
+        lines[index].includes("|")
+      ) {
         rows.push(splitTableRow(lines[index]));
         index += 1;
       }
@@ -161,7 +186,12 @@ export function renderMarkdown(content, options = {}) {
             <thead>
               <tr>
                 {header.map((cell, cellIndex) => (
-                  <th key={`head-${cellIndex}`}>{renderInlineMarkdown(cell, `th-${blocks.length}-${cellIndex}`)}</th>
+                  <th key={`head-${cellIndex}`}>
+                    {renderInlineMarkdown(
+                      cell,
+                      `th-${blocks.length}-${cellIndex}`,
+                    )}
+                  </th>
                 ))}
               </tr>
             </thead>
@@ -170,14 +200,17 @@ export function renderMarkdown(content, options = {}) {
                 <tr key={`row-${rowIndex}`}>
                   {header.map((_, cellIndex) => (
                     <td key={`cell-${rowIndex}-${cellIndex}`}>
-                      {renderInlineMarkdown(row[cellIndex] || "", `td-${blocks.length}-${rowIndex}-${cellIndex}`)}
+                      {renderInlineMarkdown(
+                        row[cellIndex] || "",
+                        `td-${blocks.length}-${rowIndex}-${cellIndex}`,
+                      )}
                     </td>
                   ))}
                 </tr>
               ))}
             </tbody>
           </table>
-        </div>
+        </div>,
       );
       continue;
     }
@@ -204,19 +237,30 @@ export function renderMarkdown(content, options = {}) {
                 className="note-markdown-checkbox"
                 checked={item.checked}
                 disabled={readOnlyChecklist && !onToggleChecklist}
-                onChange={() => onToggleChecklist?.(item.lineIndex, !item.checked)}
+                onChange={() =>
+                  onToggleChecklist?.(item.lineIndex, !item.checked)
+                }
               />
-              <span>{renderInlineMarkdown(item.text, `check-${blocks.length}-${itemIndex}`)}</span>
+              <span>
+                {renderInlineMarkdown(
+                  item.text,
+                  `check-${blocks.length}-${itemIndex}`,
+                )}
+              </span>
             </li>
           ))}
-        </ul>
+        </ul>,
       );
       continue;
     }
 
     if (isBullet(line)) {
       const items = [];
-      while (index < lines.length && isBullet(lines[index]) && !isChecklist(lines[index])) {
+      while (
+        index < lines.length &&
+        isBullet(lines[index]) &&
+        !isChecklist(lines[index])
+      ) {
         items.push(lines[index].replace(/^[-*]\s+/, ""));
         index += 1;
       }
@@ -224,9 +268,11 @@ export function renderMarkdown(content, options = {}) {
       blocks.push(
         <ul key={`ul-${blocks.length}`}>
           {items.map((item, itemIndex) => (
-            <li key={`ul-item-${itemIndex}`}>{renderInlineMarkdown(item, `ul-${blocks.length}-${itemIndex}`)}</li>
+            <li key={`ul-item-${itemIndex}`}>
+              {renderInlineMarkdown(item, `ul-${blocks.length}-${itemIndex}`)}
+            </li>
           ))}
-        </ul>
+        </ul>,
       );
       continue;
     }
@@ -241,9 +287,11 @@ export function renderMarkdown(content, options = {}) {
       blocks.push(
         <ol key={`ol-${blocks.length}`}>
           {items.map((item, itemIndex) => (
-            <li key={`ol-item-${itemIndex}`}>{renderInlineMarkdown(item, `ol-${blocks.length}-${itemIndex}`)}</li>
+            <li key={`ol-item-${itemIndex}`}>
+              {renderInlineMarkdown(item, `ol-${blocks.length}-${itemIndex}`)}
+            </li>
           ))}
-        </ol>
+        </ol>,
       );
       continue;
     }
@@ -258,14 +306,17 @@ export function renderMarkdown(content, options = {}) {
       blocks.push(
         <blockquote key={`quote-${blocks.length}`}>
           {renderInlineMarkdown(quoteLines.join(" "), `quote-${blocks.length}`)}
-        </blockquote>
+        </blockquote>,
       );
       continue;
     }
 
     const paragraphLines = [line];
     index += 1;
-    while (index < lines.length && !isBlockBoundary(lines[index], lines[index + 1] || "")) {
+    while (
+      index < lines.length &&
+      !isBlockBoundary(lines[index], lines[index + 1] || "")
+    ) {
       paragraphLines.push(lines[index]);
       index += 1;
     }
@@ -275,10 +326,13 @@ export function renderMarkdown(content, options = {}) {
         {paragraphLines.map((paragraphLine, lineIndex) => (
           <Fragment key={`p-${blocks.length}-${lineIndex}`}>
             {lineIndex > 0 ? <br /> : null}
-            {renderInlineMarkdown(paragraphLine, `p-${blocks.length}-${lineIndex}`)}
+            {renderInlineMarkdown(
+              paragraphLine,
+              `p-${blocks.length}-${lineIndex}`,
+            )}
           </Fragment>
         ))}
-      </p>
+      </p>,
     );
   }
 
