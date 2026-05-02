@@ -726,7 +726,7 @@ export default function App() {
   }
 
   const showBackButton = editing || (isMobile && selectedNote);
-  const showTopbarTitle = editing;
+  const showTopbarTitle = editing || !selectedNote;
   const compactTopbar = isMobile;
 
   return (
@@ -811,7 +811,7 @@ export default function App() {
                 </div>
                 {note.tags.length > 0 && (
                   <div className="sidebar-note-tags">
-                    {note.tags.map((tag) => {
+                    {note.tags.slice(0, 3).map((tag) => {
                       const [background, color] = getTagColor(tag, theme);
 
                       return (
@@ -827,6 +827,11 @@ export default function App() {
                         </span>
                       );
                     })}
+                    {note.tags.length > 3 && (
+                      <span className="tag-badge tag-badge--more">
+                        +{note.tags.length - 3}
+                      </span>
+                    )}
                   </div>
                 )}
                 <div className="note-item-date">
