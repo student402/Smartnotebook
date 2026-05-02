@@ -1118,16 +1118,16 @@ body[data-theme="light"] .tag-filter {
 }
 
 .note-markdown h1 {
-  font-size: calc(var(--note-font-size, 18px) * 1.5);
+  font-size: calc(var(--note-font-size, 18px) * 1.85);
 }
 .note-markdown h2 {
-  font-size: calc(var(--note-font-size, 18px) * 1.32);
+  font-size: calc(var(--note-font-size, 18px) * 1.45);
 }
 .note-markdown h3 {
-  font-size: calc(var(--note-font-size, 18px) * 1.18);
+  font-size: calc(var(--note-font-size, 18px) * 1.2);
 }
 .note-markdown h4 {
-  font-size: calc(var(--note-font-size, 18px) * 1.08);
+  font-size: calc(var(--note-font-size, 18px) * 1.05);
 }
 
 .note-markdown p {
@@ -2616,7 +2616,6 @@ body[data-theme="light"] .note-hr {
   color: var(--accent);
   font-size: 9px;
   font-weight: 800;
-  letter-spacing: 0.3px;
   flex-shrink: 0;
   line-height: 1;
 }
@@ -2624,18 +2623,14 @@ body[data-theme="light"] .note-hr {
 .rp-quote {
   padding-left: 4px;
   border-left: 2px solid var(--accent);
-  color: var(--text-muted) !important;
   font-style: italic;
 }
-
 .rp-quote-bar {
   display: none;
 }
-
 .rp-bullet {
   gap: 7px !important;
 }
-
 .rp-bullet-dot {
   width: 5px;
   height: 5px;
@@ -2645,14 +2640,11 @@ body[data-theme="light"] .note-hr {
   margin-top: 1px;
   opacity: 0.6;
 }
-
 .rp-numbered-dot {
   flex-shrink: 0;
-  color: var(--text-muted);
   font-weight: 700;
   opacity: 0.7;
 }
-
 .rp-check {
   gap: 6px !important;
 }
@@ -2667,7 +2659,6 @@ body[data-theme="light"] .note-hr {
   border: 1.5px solid var(--text-muted);
   flex-shrink: 0;
   font-size: 9px;
-  color: var(--text-muted);
   opacity: 0.7;
 }
 
@@ -2676,7 +2667,6 @@ body[data-theme="light"] .note-hr {
   color: var(--success);
   opacity: 1;
 }
-
 .rp-check-done {
   text-decoration: line-through;
   opacity: 0.55;
@@ -2693,7 +2683,6 @@ body[data-theme="light"] .note-hr {
   font-size: 10px !important;
   font-weight: 700;
   color: var(--text-muted) !important;
-  letter-spacing: 0.3px;
   flex-shrink: 0;
   align-self: flex-start;
 }
@@ -2740,7 +2729,6 @@ body[data-theme="light"] .note-hr {
 }
 .rp-italic {
   font-style: italic;
-  color: var(--text-muted);
 }
 .rp-code {
   font-family: monospace;
@@ -2748,7 +2736,6 @@ body[data-theme="light"] .note-hr {
   border-color: rgba(124, 111, 205, 0.22);
   background: rgba(124, 111, 205, 0.08);
 }
-
 .rp-empty {
   color: var(--text-muted);
   font-size: 12px;
@@ -2759,7 +2746,6 @@ body[data-theme="light"] .note-hr {
 body[data-theme="light"] .rp-heading-marker {
   background: rgba(155, 105, 36, 0.12);
 }
-
 body[data-theme="light"] .rp-badge--code {
   color: #5b4aab !important;
 }
