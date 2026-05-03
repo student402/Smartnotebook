@@ -1,4 +1,5 @@
 import json
+import logging
 import re
 import socket
 from ipaddress import ip_address
@@ -11,17 +12,29 @@ from uuid import uuid4
 from django.conf import settings
 from django.core.files.storage import default_storage
 from django.db import connection, transaction
-from django.db.models import Q
+from django.db.models import Count, Q
 from rest_framework import status, viewsets
+
+logger = logging.getLogger("notes")
 from rest_framework.decorators import action
 from rest_framework.generics import CreateAPIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.throttling import UserRateThrottle
+from rest_framework.views import APIView
 
 from .models import Note, Tag
 from .pagination import NotePagination
 from .recommendation import get_similar_notes
-from .serializers import NoteSerializer, TagSerializer, UserRegistrationSerializer
+from .serializers import (
+    MAX_CONTENT_CHARS,
+    MAX_NOTES_PER_USER,
+    MAX_TAG_NAME_LEN,
+    MAX_TAGS_PER_NOTE,
+    NoteSerializer,
+    TagSerializer,
+    UserRegistrationSerializer,
+)
 from .services.tag_service import get_or_create_tags_for_owner
 from .services.vector_service import rebuild_vector_for_note, rebuild_vectors_for_owner
 
@@ -31,6 +44,12 @@ try:
     POSTGRES_SEARCH_AVAILABLE = True
 except ImportError:
     POSTGRES_SEARCH_AVAILABLE = False
+
+
+class LinkPreviewThrottle(UserRateThrottle):
+    """Stricter throttle for the outbound-HTTP link preview action."""
+
+    scope = "link_preview"
 
 
 def extract_html_meta(html: str, *names: str) -> str:
@@ -70,7 +89,10 @@ def fetch_link_preview(url: str) -> dict[str, str]:
         },
     ) as response:
         content_type = response.headers.get("Content-Type", "")
-        if "text/html" not in content_type and "application/xhtml+xml" not in content_type:
+        if (
+            "text/html" not in content_type
+            and "application/xhtml+xml" not in content_type
+        ):
             raise ValueError("Link preview is only available for HTML pages.")
 
         html = response.read(1024 * 1024).decode("utf-8", errors="ignore")
@@ -123,7 +145,8 @@ def validate_public_fetch_url(url: str) -> str:
 
     try:
         addresses = {
-            result[4][0] for result in socket.getaddrinfo(hostname, port, type=socket.SOCK_STREAM)
+            result[4][0]
+            for result in socket.getaddrinfo(hostname, port, type=socket.SOCK_STREAM)
         }
     except socket.gaierror as error:
         raise ValueError("Could not resolve the requested host.") from error
@@ -145,7 +168,9 @@ class NoRedirectHandler(HTTPRedirectHandler):
         return None
 
 
-def open_public_url(url: str, headers: dict[str, str], timeout: int = 5, max_redirects: int = 3):
+def open_public_url(
+    url: str, headers: dict[str, str], timeout: int = 5, max_redirects: int = 3
+):
     """Open a public URL while validating each redirect target."""
     opener = build_opener(NoRedirectHandler())
     current_url = url
@@ -172,14 +197,31 @@ def open_public_url(url: str, headers: dict[str, str], timeout: int = 5, max_red
 def detect_image_format(header: bytes) -> tuple[str, tuple[str, ...], str] | None:
     """Return detected image type, allowed extensions, and canonical extension."""
     signatures = (
-        ("png", (".png",), ".png", lambda value: value.startswith(b"\x89PNG\r\n\x1a\n")),
-        ("jpeg", (".jpg", ".jpeg"), ".jpg", lambda value: value.startswith(b"\xff\xd8\xff")),
-        ("gif", (".gif",), ".gif", lambda value: value.startswith((b"GIF87a", b"GIF89a"))),
+        (
+            "png",
+            (".png",),
+            ".png",
+            lambda value: value.startswith(b"\x89PNG\r\n\x1a\n"),
+        ),
+        (
+            "jpeg",
+            (".jpg", ".jpeg"),
+            ".jpg",
+            lambda value: value.startswith(b"\xff\xd8\xff"),
+        ),
+        (
+            "gif",
+            (".gif",),
+            ".gif",
+            lambda value: value.startswith((b"GIF87a", b"GIF89a")),
+        ),
         (
             "webp",
             (".webp",),
             ".webp",
-            lambda value: len(value) >= 12 and value[:4] == b"RIFF" and value[8:12] == b"WEBP",
+            lambda value: len(value) >= 12
+            and value[:4] == b"RIFF"
+            and value[8:12] == b"WEBP",
         ),
         ("bmp", (".bmp",), ".bmp", lambda value: value.startswith(b"BM")),
     )
@@ -210,7 +252,9 @@ def parse_exported_note_file(content: str, suffix: str) -> dict[str, object]:
             parsed["title"] = title_match.group(1).replace('\\"', '"').strip() or None
 
         tag_matches = re.findall(r'^\s*-\s*"(.*)"\s*$', front_matter, re.MULTILINE)
-        parsed["tags"] = [tag.replace('\\"', '"').strip() for tag in tag_matches if tag.strip()]
+        parsed["tags"] = [
+            tag.replace('\\"', '"').strip() for tag in tag_matches if tag.strip()
+        ]
 
         lines = body.strip().splitlines()
         content_start = 0
@@ -221,7 +265,9 @@ def parse_exported_note_file(content: str, suffix: str) -> dict[str, object]:
                 content_start += 1
 
             for prefix in ("- Created:", "- Updated:", "- Tags:"):
-                if content_start < len(lines) and lines[content_start].startswith(prefix):
+                if content_start < len(lines) and lines[content_start].startswith(
+                    prefix
+                ):
                     content_start += 1
 
             while content_start < len(lines) and not lines[content_start].strip():
@@ -248,7 +294,9 @@ def parse_exported_note_file(content: str, suffix: str) -> dict[str, object]:
             elif header.startswith("Tags: "):
                 tag_line = header.removeprefix("Tags: ").strip()
                 if tag_line and tag_line != "-":
-                    parsed["tags"] = [tag.strip() for tag in tag_line.split(",") if tag.strip()]
+                    parsed["tags"] = [
+                        tag.strip() for tag in tag_line.split(",") if tag.strip()
+                    ]
 
         parsed["content"] = body or content.strip()
 
@@ -306,6 +354,13 @@ class NoteViewSet(viewsets.ModelViewSet):
         note = serializer.save()
         rebuild_vector_for_note(note)
 
+    def perform_destroy(self, instance):
+        owner = instance.owner
+        instance.delete()
+        # Clean up tags that no longer belong to any note for this owner
+        Tag.objects.filter(owner=owner, notes__isnull=True).delete()
+        rebuild_vectors_for_owner(owner)
+
     @action(detail=False, methods=["get"])
     def search(self, request):
         query = (request.query_params.get("q") or "").strip()
@@ -314,7 +369,9 @@ class NoteViewSet(viewsets.ModelViewSet):
             return Response([])
 
         if can_use_postgres_search():
-            queryset = build_postgres_search_queryset(request.user, query).prefetch_related("tags")
+            queryset = build_postgres_search_queryset(
+                request.user, query
+            ).prefetch_related("tags")
         else:
             queryset = (
                 Note.objects.filter(owner=request.user)
@@ -323,7 +380,9 @@ class NoteViewSet(viewsets.ModelViewSet):
                 .order_by("-updated_at")
             )
 
-        queryset = filter_notes_by_tag(queryset, request.user, request.query_params.get("tag"))
+        queryset = filter_notes_by_tag(
+            queryset, request.user, request.query_params.get("tag")
+        )
         page = self.paginate_queryset(queryset)
         if page is not None:
             serializer = self.get_serializer(page, many=True)
@@ -346,11 +405,18 @@ class NoteViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(similar_notes, many=True)
         return Response(serializer.data)
 
-    @action(detail=False, methods=["get"], url_path="link-preview")
+    @action(
+        detail=False,
+        methods=["get"],
+        url_path="link-preview",
+        throttle_classes=[LinkPreviewThrottle],
+    )
     def link_preview(self, request):
         url = (request.query_params.get("url") or "").strip()
         if not url:
-            return Response({"error": "URL is required."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "URL is required."}, status=status.HTTP_400_BAD_REQUEST
+            )
 
         try:
             preview = fetch_link_preview(url)
@@ -358,11 +424,13 @@ class NoteViewSet(viewsets.ModelViewSet):
             return Response({"error": str(error)}, status=status.HTTP_400_BAD_REQUEST)
         except (HTTPError, URLError):
             return Response(
-                {"error": "Failed to fetch link preview."}, status=status.HTTP_502_BAD_GATEWAY
+                {"error": "Failed to fetch link preview."},
+                status=status.HTTP_502_BAD_GATEWAY,
             )
         except Exception:
             return Response(
-                {"error": "Failed to fetch link preview."}, status=status.HTTP_502_BAD_GATEWAY
+                {"error": "Failed to fetch link preview."},
+                status=status.HTTP_502_BAD_GATEWAY,
             )
 
         return Response(preview)
@@ -391,12 +459,14 @@ class NoteViewSet(viewsets.ModelViewSet):
 
         if not uploaded_file:
             return Response(
-                {"error": "No backup file provided."}, status=status.HTTP_400_BAD_REQUEST
+                {"error": "No backup file provided."},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         if uploaded_file.size > settings.BACKUP_RESTORE_MAX_BYTES:
             return Response(
-                {"error": "Backup file is too large."}, status=status.HTTP_400_BAD_REQUEST
+                {"error": "Backup file is too large."},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         try:
@@ -408,7 +478,8 @@ class NoteViewSet(viewsets.ModelViewSet):
             )
         except json.JSONDecodeError:
             return Response(
-                {"error": "Backup file is not valid JSON."}, status=status.HTTP_400_BAD_REQUEST
+                {"error": "Backup file is not valid JSON."},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         notes_data = payload.get("notes")
@@ -421,17 +492,35 @@ class NoteViewSet(viewsets.ModelViewSet):
         notes_to_restore: list[dict[str, object]] = []
         all_tag_names: list[object] = []
 
+        # Enforce per-user note count before restoring
+        current_count = Note.objects.filter(owner=request.user).count()
+        available_slots = MAX_NOTES_PER_USER - current_count
+        if available_slots <= 0:
+            return Response(
+                {
+                    "error": f"Note limit reached. You can store up to {MAX_NOTES_PER_USER} notes."
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        total_in_backup = 0
         for item in notes_data:
             if not isinstance(item, dict):
                 continue
+            total_in_backup += 1
 
             title = str(item.get("title") or "").strip()[:255]
             if not title:
                 title = "Restored note"
 
-            content = str(item.get("content") or "")
+            content = str(item.get("content") or "")[:MAX_CONTENT_CHARS]
             raw_tags = item.get("tags") or []
             tag_names = raw_tags if isinstance(raw_tags, list) else []
+            tag_names = [
+                str(t).strip().lower()[:MAX_TAG_NAME_LEN]
+                for t in tag_names
+                if str(t).strip()
+            ][:MAX_TAGS_PER_NOTE]
 
             notes_to_restore.append(
                 {
@@ -441,6 +530,9 @@ class NoteViewSet(viewsets.ModelViewSet):
                 }
             )
             all_tag_names.extend(tag_names)
+
+        skipped = max(0, total_in_backup - available_slots)
+        notes_to_restore = notes_to_restore[:available_slots]
 
         tags_by_name = get_or_create_tags_for_owner(request.user, all_tag_names)
         restored_notes: list[Note] = []
@@ -453,7 +545,9 @@ class NoteViewSet(viewsets.ModelViewSet):
                     content=str(item["content"]),
                 )
                 tag_names = item["tag_names"]
-                tags = [tags_by_name[name] for name in tag_names if name in tags_by_name]
+                tags = [
+                    tags_by_name[name] for name in tag_names if name in tags_by_name
+                ]
                 if tags:
                     note.tags.set(tags)
                 restored_notes.append(note)
@@ -461,23 +555,34 @@ class NoteViewSet(viewsets.ModelViewSet):
         if restored_notes:
             rebuild_vectors_for_owner(request.user)
 
-        return Response(
-            {
-                "restored": len(restored_notes),
-            },
-            status=status.HTTP_201_CREATED,
-        )
+        response_data: dict = {"restored": len(restored_notes)}
+        if skipped:
+            response_data["warning"] = (
+                f"{skipped} note(s) were not restored because you reached "
+                f"the {MAX_NOTES_PER_USER}-note limit."
+            )
+            logger.info(
+                "Restore truncated for user %s: %d skipped of %d",
+                request.user.id,
+                skipped,
+                total_in_backup,
+            )
+
+        return Response(response_data, status=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=["post"], url_path="import")
     def import_note(self, request):
         uploaded_file = request.FILES.get("file")
 
         if not uploaded_file:
-            return Response({"error": "No file provided."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "No file provided."}, status=status.HTTP_400_BAD_REQUEST
+            )
 
         if uploaded_file.size > settings.NOTE_IMPORT_MAX_BYTES:
             return Response(
-                {"error": "Imported file is too large."}, status=status.HTTP_400_BAD_REQUEST
+                {"error": "Imported file is too large."},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         suffix = Path(uploaded_file.name).suffix.lower()
@@ -494,7 +599,9 @@ class NoteViewSet(viewsets.ModelViewSet):
                     from pypdf import PdfReader
                 except ImportError:
                     return Response(
-                        {"error": "PDF import requires the pypdf package to be installed."},
+                        {
+                            "error": "PDF import requires the pypdf package to be installed."
+                        },
                         status=status.HTTP_503_SERVICE_UNAVAILABLE,
                     )
 
@@ -536,7 +643,9 @@ class NoteViewSet(viewsets.ModelViewSet):
             is_markdown=suffix == ".md",
         )
         if parsed_note["tags"]:
-            tags = list(get_or_create_tags_for_owner(request.user, parsed_note["tags"]).values())
+            tags = list(
+                get_or_create_tags_for_owner(request.user, parsed_note["tags"]).values()
+            )
             note.tags.set(tags)
 
         rebuild_vector_for_note(note)
@@ -555,12 +664,14 @@ class NoteViewSet(viewsets.ModelViewSet):
 
         if not getattr(uploaded_file, "content_type", "").startswith("image/"):
             return Response(
-                {"error": "Only image uploads are supported."}, status=status.HTTP_400_BAD_REQUEST
+                {"error": "Only image uploads are supported."},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         if uploaded_file.size > settings.IMAGE_UPLOAD_MAX_BYTES:
             return Response(
-                {"error": "Image file is too large."}, status=status.HTTP_400_BAD_REQUEST
+                {"error": "Image file is too large."},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         header = uploaded_file.read(64)
@@ -568,7 +679,8 @@ class NoteViewSet(viewsets.ModelViewSet):
         detected = detect_image_format(header)
         if not detected:
             return Response(
-                {"error": "Unsupported or invalid image file."}, status=status.HTTP_400_BAD_REQUEST
+                {"error": "Unsupported or invalid image file."},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         _image_type, allowed_extensions, canonical_extension = detected
@@ -582,7 +694,9 @@ class NoteViewSet(viewsets.ModelViewSet):
         filename = f"note-images/{request.user.id}/{uuid4().hex}{suffix}"
         saved_path = default_storage.save(filename, uploaded_file)
         media_url = (
-            settings.MEDIA_URL if settings.MEDIA_URL.endswith("/") else f"{settings.MEDIA_URL}/"
+            settings.MEDIA_URL
+            if settings.MEDIA_URL.endswith("/")
+            else f"{settings.MEDIA_URL}/"
         )
         normalized_saved_path = str(saved_path).replace("\\", "/").lstrip("/")
         image_url = urljoin(media_url, normalized_saved_path)
@@ -597,9 +711,56 @@ class TagViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         return (
             Tag.objects.filter(owner=self.request.user, notes__owner=self.request.user)
+            .annotate(note_count=Count("notes"))
             .distinct()
             .order_by("name")
         )
+
+
+class HealthCheckView(APIView):
+    """Public liveness/readiness probe for Docker and load balancers."""
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request):
+        db_ok = True
+        try:
+            connection.ensure_connection()
+        except Exception:
+            db_ok = False
+        payload = {"status": "ok" if db_ok else "degraded", "db": db_ok}
+        http_status = (
+            status.HTTP_200_OK if db_ok else status.HTTP_503_SERVICE_UNAVAILABLE
+        )
+        return Response(payload, status=http_status)
+
+
+class LogoutView(APIView):
+    """Blacklist the provided refresh token, effectively logging the user out."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            from rest_framework_simplejwt.tokens import RefreshToken
+
+            refresh_token = request.data.get("refresh")
+            if not refresh_token:
+                return Response(
+                    {"error": "refresh token is required."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            token = RefreshToken(refresh_token)
+            token.blacklist()
+            return Response(
+                {"detail": "Successfully logged out."}, status=status.HTTP_200_OK
+            )
+        except Exception:
+            return Response(
+                {"error": "Invalid or already blacklisted token."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
 
 class RegisterView(CreateAPIView):
@@ -607,3 +768,17 @@ class RegisterView(CreateAPIView):
 
     serializer_class = UserRegistrationSerializer
     permission_classes = [AllowAny]
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        if not serializer.is_valid():
+            # Return a generic error to avoid username enumeration
+            return Response(
+                {"error": "Registration failed. Please check your input."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        self.perform_create(serializer)
+        return Response(
+            {"detail": "Account created successfully."},
+            status=status.HTTP_201_CREATED,
+        )
