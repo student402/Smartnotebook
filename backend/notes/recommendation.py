@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from datetime import datetime, timezone
 
 from django.contrib.auth.models import User
 from django.db.models import Case, FloatField, QuerySet, Value, When
@@ -9,38 +10,74 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 from .models import Note
 
+# ── Scoring weights ───────────────────────────────────────────────────────────
+_W_TEXT = 0.70  # TF-IDF cosine similarity
+_W_TAG = 0.25  # Jaccard tag overlap
+_W_RECENCY = 0.05  # time-decay bonus for recently updated notes
+
+# Minimum combined score to be included in results
+_SCORE_THRESHOLD = 0.06
+
+# Time-decay half-life in days: a note updated 90 days ago gets ~0.5 recency score
+_RECENCY_HALFLIFE_DAYS = 90.0
+
+# Title field repetition: repeat title N times so TF-IDF naturally up-weights it
+_TITLE_REPEAT = 3
+
+# Tag names are appended as synthetic tokens so they influence the TF-IDF space
+_TAG_REPEAT = 2
+# ─────────────────────────────────────────────────────────────────────────────
+
 
 def build_note_document(note: Note) -> str:
-    """Build the normalized text corpus entry for one note."""
-    return " ".join(
-        part
-        for part in (
-            note.title,
-            note.title,
-            note.content,
-        )
-        if part
-    )
+    """Build the weighted text corpus entry for one note.
+
+    Title is repeated to boost its TF-IDF weight.
+    Tag names are appended as synthetic tokens so shared vocabulary
+    between tags and note text is captured by the vectorizer.
+    """
+    parts: list[str] = []
+
+    if note.title:
+        parts.extend([note.title] * _TITLE_REPEAT)
+
+    # Append tag names as plain tokens (repeated for weight)
+    tag_names = [tag.name for tag in note.tags.all()]
+    if tag_names:
+        tag_token_line = " ".join(tag_names)
+        parts.extend([tag_token_line] * _TAG_REPEAT)
+
+    if note.content:
+        parts.append(note.content)
+
+    return " ".join(parts)
 
 
-def create_note_vectorizer() -> TfidfVectorizer:
-    """Create the canonical TF-IDF vectorizer used for stored vectors and recommendations."""
+def create_note_vectorizer(n_docs: int) -> TfidfVectorizer:
+    """Create a TF-IDF vectorizer scaled to the corpus size.
+
+    max_features adapts to corpus size so small corpora are not
+    over-parameterized and large ones are not under-represented.
+    """
+    max_features = max(500, min(8_000, n_docs * 40))
     return TfidfVectorizer(
         stop_words="english",
-        max_features=5000,
+        max_features=max_features,
         ngram_range=(1, 2),
         min_df=1,
-        sublinear_tf=True,
+        sublinear_tf=True,  # log(1+tf) dampens high-frequency terms
+        strip_accents="unicode",
+        analyzer="word",
     )
 
 
 def build_note_feature_matrix(notes: list[Note]):
-    """Build a canonical TF-IDF feature matrix for one note corpus."""
+    """Build a TF-IDF feature matrix for a note corpus."""
     documents = [build_note_document(note) for note in notes]
-    if not any(document.strip() for document in documents):
+    if not any(doc.strip() for doc in documents):
         return None
 
-    vectorizer = create_note_vectorizer()
+    vectorizer = create_note_vectorizer(len(notes))
     try:
         return vectorizer.fit_transform(documents)
     except ValueError:
@@ -48,11 +85,11 @@ def build_note_feature_matrix(notes: list[Note]):
 
 
 def get_stored_feature_matrix(notes: list[Note]):
-    """Return a dense matrix from stored vectors when they are complete and comparable."""
+    """Return a dense matrix from stored vectors if complete and consistent."""
     if not notes:
         return None
 
-    expected_length = None
+    expected_length: int | None = None
     vectors: list[list[float]] = []
 
     for note in notes:
@@ -60,36 +97,67 @@ def get_stored_feature_matrix(notes: list[Note]):
         if not isinstance(vector, list):
             return None
 
-        current_vector: list[float] = []
+        row: list[float] = []
         for value in vector:
             if not isinstance(value, int | float) or not math.isfinite(float(value)):
                 return None
-            current_vector.append(float(value))
+            row.append(float(value))
 
         if expected_length is None:
-            expected_length = len(current_vector)
-        elif len(current_vector) != expected_length:
+            expected_length = len(row)
+        elif len(row) != expected_length:
             return None
 
-        vectors.append(current_vector)
+        vectors.append(row)
 
     return vectors
 
 
 def get_note_similarity_matrix(notes: list[Note]):
-    """Return a cosine-similarity matrix using stored vectors when valid, otherwise live TF-IDF."""
-    stored_vectors = get_stored_feature_matrix(notes)
-    if stored_vectors is not None:
-        return cosine_similarity(stored_vectors)
+    """Return cosine-similarity matrix, preferring stored vectors."""
+    stored = get_stored_feature_matrix(notes)
+    if stored is not None:
+        return cosine_similarity(stored)
 
-    feature_matrix = build_note_feature_matrix(notes)
-    if feature_matrix is None:
+    matrix = build_note_feature_matrix(notes)
+    if matrix is None:
         return None
-    return cosine_similarity(feature_matrix)
+    return cosine_similarity(matrix)
+
+
+def _recency_score(note: Note) -> float:
+    """Exponential decay score [0, 1] based on time since last update.
+
+    Notes updated today score 1.0; score halves every _RECENCY_HALFLIFE_DAYS days.
+    """
+    updated_at = note.updated_at
+    if updated_at is None:
+        return 0.0
+
+    now = datetime.now(tz=timezone.utc)
+    if updated_at.tzinfo is None:
+        updated_at = updated_at.replace(tzinfo=timezone.utc)
+
+    days_old = (now - updated_at).total_seconds() / 86_400
+    return math.exp(-math.log(2) * days_old / _RECENCY_HALFLIFE_DAYS)
+
+
+def _tag_jaccard(base_tags: set[str], candidate_tags: set[str]) -> float:
+    """Jaccard similarity between two tag sets. Returns 0 if both are empty."""
+    union = base_tags | candidate_tags
+    if not union:
+        return 0.0
+    return len(base_tags & candidate_tags) / len(union)
 
 
 def get_similar_notes(note: Note, user: User, top_n: int = 3) -> QuerySet[Note]:
-    """Return top-N semantically similar notes for one user note."""
+    """Return top-N semantically similar notes for one user note.
+
+    Scoring combines:
+      - TF-IDF cosine similarity on weighted document (title × 3, tags × 2, content)
+      - Jaccard tag overlap
+      - Recency decay bonus for recently updated candidate notes
+    """
     if not build_note_document(note).strip():
         return Note.objects.none()
 
@@ -98,8 +166,8 @@ def get_similar_notes(note: Note, user: User, top_n: int = 3) -> QuerySet[Note]:
         return Note.objects.none()
 
     notes = list(user_notes.prefetch_related("tags"))
+    ids = [n.id for n in notes]
 
-    ids = [current_note.id for current_note in notes]
     similarity_matrix = get_note_similarity_matrix(notes)
     if similarity_matrix is None:
         return Note.objects.none()
@@ -112,35 +180,35 @@ def get_similar_notes(note: Note, user: User, top_n: int = 3) -> QuerySet[Note]:
     base_note = notes[index]
     base_tags = {tag.name.lower() for tag in base_note.tags.all()}
 
-    ranked_notes: list[tuple[int, float]] = []
+    ranked: list[tuple[int, float]] = []
 
-    for candidate_index, candidate_note in enumerate(notes):
-        if candidate_note.id == note.id:
+    for i, candidate in enumerate(notes):
+        if candidate.id == note.id:
             continue
 
-        text_score = float(similarity_matrix[index][candidate_index])
-        candidate_tags = {tag.name.lower() for tag in candidate_note.tags.all()}
+        text_score = float(similarity_matrix[index][i])
+        candidate_tags = {tag.name.lower() for tag in candidate.tags.all()}
+        tag_score = _tag_jaccard(base_tags, candidate_tags)
+        recency = _recency_score(candidate)
 
-        if base_tags or candidate_tags:
-            shared_tags = len(base_tags & candidate_tags)
-            combined_tags = len(base_tags | candidate_tags)
-            tag_score = shared_tags / combined_tags if combined_tags else 0.0
-        else:
-            tag_score = 0.0
+        final = _W_TEXT * text_score + _W_TAG * tag_score + _W_RECENCY * recency
 
-        final_score = (text_score * 0.82) + (tag_score * 0.18)
+        # Tag-only boost: if there is strong tag overlap but weak text score,
+        # still surface the note (shared tags imply intentional grouping).
+        if tag_score >= 0.5 and text_score < 0.1:
+            final = max(final, _SCORE_THRESHOLD + 0.01)
 
-        if final_score > 0.04:
-            ranked_notes.append((candidate_note.id, round(final_score, 4)))
+        if final > _SCORE_THRESHOLD:
+            ranked.append((candidate.id, round(final, 4)))
 
-    ranked_notes.sort(key=lambda item: item[1], reverse=True)
-    ranked_notes = ranked_notes[:top_n]
+    ranked.sort(key=lambda item: item[1], reverse=True)
+    ranked = ranked[:top_n]
 
-    if not ranked_notes:
+    if not ranked:
         return Note.objects.none()
 
-    similar_ids = [note_id for note_id, _score in ranked_notes]
-    score_cases = [When(id=note_id, then=Value(score)) for note_id, score in ranked_notes]
+    similar_ids = [nid for nid, _ in ranked]
+    score_cases = [When(id=nid, then=Value(score)) for nid, score in ranked]
 
     return (
         Note.objects.filter(id__in=similar_ids)

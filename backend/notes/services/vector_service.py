@@ -18,9 +18,9 @@ def rebuild_note_vectors(notes: list[Note]) -> None:
         Note.objects.bulk_update(notes, ["vector"])
         return
 
-    dense_vectors = matrix.toarray()
-    for index, note in enumerate(notes):
-        note.vector = dense_vectors[index].tolist()
+    dense = matrix.toarray()
+    for i, note in enumerate(notes):
+        note.vector = dense[i].tolist()
 
     Note.objects.bulk_update(notes, ["vector"])
 
@@ -28,16 +28,16 @@ def rebuild_note_vectors(notes: list[Note]) -> None:
 def get_owner_notes(owner: User | int) -> list[Note]:
     """Return one owner's notes in a stable order for corpus rebuilding."""
     owner_id = owner.id if isinstance(owner, User) else owner
-    return list(Note.objects.filter(owner_id=owner_id).order_by("id"))
+    return list(Note.objects.filter(owner_id=owner_id).prefetch_related("tags").order_by("id"))
 
 
 def rebuild_vectors_for_owner(owner: User | int) -> None:
-    """Rebuild comparable vectors for all notes owned by one user."""
+    """Rebuild comparable TF-IDF vectors for all notes owned by one user."""
     rebuild_note_vectors(get_owner_notes(owner))
 
 
 def invalidate_vectors_for_owner(owner: User | int) -> None:
-    """Mark one owner's stored vectors stale so recommendations fall back to live TF-IDF."""
+    """Mark one owner's stored vectors stale (fallback to live TF-IDF)."""
     owner_id = owner.id if isinstance(owner, User) else owner
     Note.objects.filter(owner_id=owner_id).update(vector=None)
 
@@ -45,11 +45,15 @@ def invalidate_vectors_for_owner(owner: User | int) -> None:
 def rebuild_all_vectors() -> None:
     """Rebuild TF-IDF vectors for every user's notes in isolated corpora."""
     owner_ids = Note.objects.order_by().values_list("owner_id", flat=True).distinct()
-
     for owner_id in owner_ids:
         rebuild_vectors_for_owner(owner_id)
 
 
 def rebuild_vector_for_note(note: Note) -> None:
-    """Mark one note owner's stored vectors stale after corpus-changing edits."""
-    invalidate_vectors_for_owner(note.owner)
+    """Rebuild vectors for the entire owner corpus after any note change.
+
+    TF-IDF vectors are corpus-relative — changing one document shifts
+    IDF weights for all documents.  We therefore always rebuild the full
+    owner corpus rather than updating a single vector in isolation.
+    """
+    rebuild_vectors_for_owner(note.owner)
