@@ -1,13 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  clearStoredTokens,
-  createNote,
-  deleteNote,
-  exportBackup,
-  getSimilarNotes,
-  importNoteFile,
-  restoreBackup,
-  updateNote,
+  clearStoredTokens, createNote, deleteNote, exportBackup,
+  getSimilarNotes, importNoteFile, restoreBackup, updateNote,
 } from "./lib/api";
 import { FontSizeSwitch } from "./components/controls/FontSizeSwitch";
 import { LanguageSwitch } from "./components/controls/LanguageSwitch";
@@ -19,21 +13,10 @@ import { NotesListContent } from "./components/notes/NotesListContent";
 import { NoteView } from "./components/notes/NoteView";
 import Login from "./lib/Login";
 import { parseChecklistLine } from "./lib/markdown/checklist";
-import {
-  detectLanguage,
-  detectNoteFontSize,
-  detectTheme,
-  getConstrainedNoteFontSize,
-  getMaxNoteFontSize,
-} from "./lib/utils/detect";
+import { detectLanguage, detectNoteFontSize, detectTheme, getConstrainedNoteFontSize, getMaxNoteFontSize } from "./lib/utils/detect";
 import { formatDate } from "./lib/utils/date";
 import { getErrorMessage } from "./lib/utils/error";
-import {
-  exportNoteAsMarkdown,
-  exportNoteAsPdf,
-  exportNoteAsTxt,
-  triggerDownload,
-} from "./lib/utils/export";
+import { exportNoteAsMarkdown, exportNoteAsPdf, exportNoteAsTxt, triggerDownload } from "./lib/utils/export";
 import { getPlainTextPreview } from "./lib/utils/preview";
 import { getTagColor } from "./lib/utils/tagColor";
 import { useNotes } from "./lib/hooks/useNotes";
@@ -54,8 +37,7 @@ const UI_TEXT = {
     noResultsTitle: "Ничего не найдено",
     noResultsDescription: "Измените строку поиска или снимите фильтр по тегу.",
     noNotesTitle: "Нет заметок",
-    noNotesDescription:
-      "Создайте первую заметку, импортируйте файл или измените активный фильтр.",
+    noNotesDescription: "Создайте первую заметку, импортируйте файл или измените активный фильтр.",
     noteEmpty: "Содержимое пусто",
     noteTitleLabel: "Заголовок",
     noteTagsLabel: "Теги",
@@ -83,8 +65,7 @@ const UI_TEXT = {
     listView: "Список",
     gridView: "Сетка",
     allNotesTitle: "Все заметки",
-    allNotesDescription:
-      "Быстрый обзор заметок со всеми тегами и датами обновления.",
+    allNotesDescription: "Быстрый обзор заметок со всеми тегами и датами обновления.",
     gridTitle: "Сетка заметок",
     gridDescription: "Карточки заметок с полным набором тегов.",
     recommendations: "Похожие заметки",
@@ -112,8 +93,7 @@ const UI_TEXT = {
     loginFeatureLanguageText: "Русский и английский интерфейс",
     authError: "Неверное имя пользователя или пароль",
     authRegisterSuccess: "Регистрация прошла успешно. Теперь можно войти.",
-    connectionError:
-      "Не удалось подключиться к API. Проверьте backend и настройки адреса.",
+    connectionError: "Не удалось подключиться к API. Проверьте backend и настройки адреса.",
     saveSuccess: "Заметка сохранена",
     deleteSuccess: "Заметка удалена",
     saveError: "Ошибка сохранения",
@@ -142,8 +122,7 @@ const UI_TEXT = {
     textSizeIncrease: "A+",
     sessionExpiring: "Сессия скоро завершится. Сохраните работу.",
     sessionExpired: "Сессия завершена. Войдите снова.",
-    noTagNotesDescription: (tag) =>
-      `Нет заметок с тегом "${tag}". Попробуйте другой тег.`,
+    noTagNotesDescription: (tag) => `Нет заметок с тегом "${tag}". Попробуйте другой тег.`,
     clearTagFilter: "Сбросить фильтр по тегу",
     insertVideo: "Видео",
     backupExport: "Бэкап",
@@ -157,8 +136,7 @@ const UI_TEXT = {
     playVideo: "Смотреть видео",
     insertImage: "Изображение",
     imageUploadError: "Не удалось загрузить изображение",
-    imageDropHint:
-      "Перетащите изображение сюда или используйте кнопку вставки изображения.",
+    imageDropHint: "Перетащите изображение сюда или используйте кнопку вставки изображения.",
     imageOnlyPreview: "🖼 Изображение",
   },
   en: {
@@ -166,11 +144,9 @@ const UI_TEXT = {
     searchPlaceholder: "Search notes...",
     notesCount: (count) => `${count} notes`,
     noResultsTitle: "Nothing found",
-    noResultsDescription:
-      "Change the search query or clear the active tag filter.",
+    noResultsDescription: "Change the search query or clear the active tag filter.",
     noNotesTitle: "No notes yet",
-    noNotesDescription:
-      "Create your first note, import a file, or change the active filter.",
+    noNotesDescription: "Create your first note, import a file, or change the active filter.",
     noteEmpty: "Content is empty",
     noteTitleLabel: "Title",
     noteTagsLabel: "Tags",
@@ -226,8 +202,7 @@ const UI_TEXT = {
     loginFeatureLanguageText: "Russian and English UI",
     authError: "Invalid username or password",
     authRegisterSuccess: "Registration successful. You can now log in.",
-    connectionError:
-      "Could not reach the API. Check the backend and base URL settings.",
+    connectionError: "Could not reach the API. Check the backend and base URL settings.",
     saveSuccess: "Note saved",
     deleteSuccess: "Note deleted",
     saveError: "Save failed",
@@ -256,8 +231,7 @@ const UI_TEXT = {
     textSizeIncrease: "A+",
     sessionExpiring: "Session ending soon. Save your work.",
     sessionExpired: "Session ended. Please log in again.",
-    noTagNotesDescription: (tag) =>
-      `No notes with tag "${tag}". Try a different tag.`,
+    noTagNotesDescription: (tag) => `No notes with tag "${tag}". Try a different tag.`,
     clearTagFilter: "Clear tag filter",
     insertVideo: "Video",
     backupExport: "Backup",
@@ -276,13 +250,12 @@ const UI_TEXT = {
   },
 };
 
+
 export default function App() {
   const [language, setLanguage] = useState(detectLanguage);
   const [theme, setTheme] = useState(detectTheme);
   const [noteFontSize, setNoteFontSize] = useState(detectNoteFontSize);
-  const [isAuthenticated, setIsAuthenticated] = useState(
-    Boolean(localStorage.getItem("access")),
-  );
+  const [isAuthenticated, setIsAuthenticated] = useState(Boolean(localStorage.getItem("access")));
   const [selectedId, setSelectedId] = useState(null);
   const [editing, setEditing] = useState(false);
   const [isNew, setIsNew] = useState(false);
@@ -292,9 +265,7 @@ export default function App() {
   const [recommendations, setRecommendations] = useState([]);
   const [toast, setToast] = useState(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isMobile, setIsMobile] = useState(
-    window.innerWidth <= MOBILE_BREAKPOINT,
-  );
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= MOBILE_BREAKPOINT);
   const [isSaving, setIsSaving] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [isRestoringBackup, setIsRestoringBackup] = useState(false);
@@ -307,8 +278,7 @@ export default function App() {
   const draftTimer = useRef(null);
 
   const t = UI_TEXT[language];
-  const normalizeNotes = (value) =>
-    Array.isArray(value) ? value : (value?.results ?? []);
+  const normalizeNotes = (value) => (Array.isArray(value) ? value : value?.results ?? []);
   const clearRecommendations = useCallback(() => {
     setRecommendations([]);
   }, []);
@@ -333,18 +303,21 @@ export default function App() {
     }, 0);
   }, [resetWorkspaceState]);
 
-  const { notes, setNotes, errorMessage, setErrorMessage, loadNotesPage } =
-    useNotes({
-      isAuthenticated,
-      connectionErrorMessage: t.connectionError,
-      onAuthenticationError: handleAuthenticationError,
-      pageSize: NOTES_PAGE_SIZE,
-    });
+  const {
+    notes,
+    setNotes,
+    errorMessage,
+    setErrorMessage,
+    loadNotesPage,
+  } = useNotes({
+    isAuthenticated,
+    connectionErrorMessage: t.connectionError,
+    onAuthenticationError: handleAuthenticationError,
+    pageSize: NOTES_PAGE_SIZE,
+  });
 
   const notesList = useMemo(() => normalizeNotes(notes), [notes]);
-  const maxNoteFontSize = getMaxNoteFontSize(
-    typeof window !== "undefined" ? window.innerWidth : 1280,
-  );
+  const maxNoteFontSize = getMaxNoteFontSize(typeof window !== "undefined" ? window.innerWidth : 1280);
 
   const showToast = useCallback((message, type = "success") => {
     setToast({ message, type });
@@ -388,9 +361,7 @@ export default function App() {
     const handleResize = () => {
       const mobile = window.innerWidth <= MOBILE_BREAKPOINT;
       setIsMobile(mobile);
-      setNoteFontSize((currentSize) =>
-        getConstrainedNoteFontSize(currentSize, window.innerWidth),
-      );
+      setNoteFontSize((currentSize) => getConstrainedNoteFontSize(currentSize, window.innerWidth));
       if (!mobile) {
         setIsSidebarOpen(false);
       }
@@ -446,12 +417,11 @@ export default function App() {
     };
   }, [selectedId]);
 
+
+
   const allTags = useMemo(
-    () =>
-      [...new Set(notesList.flatMap((note) => note.tags))].sort((left, right) =>
-        left.localeCompare(right),
-      ),
-    [notesList],
+    () => [...new Set(notesList.flatMap((note) => note.tags))].sort((left, right) => left.localeCompare(right)),
+    [notesList]
   );
 
   const filteredNotes = useMemo(() => {
@@ -470,7 +440,7 @@ export default function App() {
 
   const selectedNote = useMemo(
     () => notesList.find((note) => note.id === selectedId) || null,
-    [notesList, selectedId],
+    [notesList, selectedId]
   );
 
   const closeEditor = () => {
@@ -508,18 +478,13 @@ export default function App() {
     try {
       if (isNew) {
         const response = await createNote(payload);
-        setNotes((currentNotes) => [
-          response.data,
-          ...normalizeNotes(currentNotes),
-        ]);
+        setNotes((currentNotes) => [response.data, ...normalizeNotes(currentNotes)]);
         clearRecommendations();
         setSelectedId(response.data.id);
       } else {
         const response = await updateNote(selectedId, payload);
         setNotes((currentNotes) =>
-          normalizeNotes(currentNotes).map((note) =>
-            note.id === selectedId ? response.data : note,
-          ),
+          normalizeNotes(currentNotes).map((note) => (note.id === selectedId ? response.data : note))
         );
       }
 
@@ -540,9 +505,7 @@ export default function App() {
 
     try {
       await deleteNote(selectedId);
-      setNotes((currentNotes) =>
-        normalizeNotes(currentNotes).filter((note) => note.id !== selectedId),
-      );
+      setNotes((currentNotes) => normalizeNotes(currentNotes).filter((note) => note.id !== selectedId));
       setSelectedId(null);
       setRecommendations([]);
       showToast(t.deleteSuccess);
@@ -556,10 +519,7 @@ export default function App() {
 
     try {
       const response = await importNoteFile(file);
-      setNotes((currentNotes) => [
-        response.data,
-        ...normalizeNotes(currentNotes),
-      ]);
+      setNotes((currentNotes) => [response.data, ...normalizeNotes(currentNotes)]);
       clearRecommendations();
       setSelectedId(response.data.id);
       setEditing(false);
@@ -590,7 +550,7 @@ export default function App() {
       triggerDownload(
         `smartnotebook-backup-${new Date().toISOString().slice(0, 10)}.json`,
         JSON.stringify(response.data, null, 2),
-        "application/json;charset=utf-8",
+        "application/json;charset=utf-8"
       );
       showToast(t.backupSuccess);
     } catch (error) {
@@ -647,20 +607,16 @@ export default function App() {
       return;
     }
 
-    const nextContent = lines
-      .map((line, currentIndex) =>
-        currentIndex === lineIndex
-          ? `${parsedChecklist.prefix}[${checked ? "x" : " "}] ${parsedChecklist.text}`
-          : line,
-      )
-      .join("\n");
+    const nextContent = lines.map((line, currentIndex) => (
+      currentIndex === lineIndex
+        ? `${parsedChecklist.prefix}[${checked ? "x" : " "}] ${parsedChecklist.text}`
+        : line
+    )).join("\n");
 
     const optimisticNote = { ...selectedNote, content: nextContent };
-    setNotes((currentNotes) =>
-      normalizeNotes(currentNotes).map((note) =>
-        note.id === selectedNote.id ? optimisticNote : note,
-      ),
-    );
+    setNotes((currentNotes) => normalizeNotes(currentNotes).map((note) => (
+      note.id === selectedNote.id ? optimisticNote : note
+    )));
 
     try {
       const response = await updateNote(selectedNote.id, {
@@ -668,17 +624,13 @@ export default function App() {
         content: nextContent,
         tags: selectedNote.tags,
       });
-      setNotes((currentNotes) =>
-        normalizeNotes(currentNotes).map((note) =>
-          note.id === selectedNote.id ? response.data : note,
-        ),
-      );
+      setNotes((currentNotes) => normalizeNotes(currentNotes).map((note) => (
+        note.id === selectedNote.id ? response.data : note
+      )));
     } catch (error) {
-      setNotes((currentNotes) =>
-        normalizeNotes(currentNotes).map((note) =>
-          note.id === selectedNote.id ? selectedNote : note,
-        ),
-      );
+      setNotes((currentNotes) => normalizeNotes(currentNotes).map((note) => (
+        note.id === selectedNote.id ? selectedNote : note
+      )));
       showToast(getErrorMessage(error, t.saveError), "error");
     }
   };
@@ -699,10 +651,7 @@ export default function App() {
         return;
       }
 
-      if (
-        format === "pdf" &&
-        !exportNoteAsPdf(selectedNote, language, t, noteContentRef.current)
-      ) {
+      if (format === "pdf" && !exportNoteAsPdf(selectedNote, language, t, noteContentRef.current)) {
         showToast(t.exportError, "error");
       }
     } catch {
@@ -726,7 +675,7 @@ export default function App() {
   }
 
   const showBackButton = editing || (isMobile && selectedNote);
-  const showTopbarTitle = editing || !selectedNote;
+  const showTopbarTitle = editing;
   const compactTopbar = isMobile;
 
   return (
@@ -750,10 +699,7 @@ export default function App() {
         onClick={() => setIsSidebarOpen(false)}
       />
       <div className="app">
-        <aside
-          className={`sidebar${isSidebarOpen ? " open" : ""}`}
-          style={{ display: "flex", flexDirection: "column", height: "100%" }}
-        >
+        <aside className={`sidebar${isSidebarOpen ? " open" : ""}`} style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
           <div className="sidebar-logo">
             <h1>
               <Icon name="book" size={20} />
@@ -786,17 +732,13 @@ export default function App() {
                     onClick={() => setActiveTag(activeTag === tag ? null : tag)}
                   >
                     <Icon name="tag" size={10} />
-                    <span className="tag-chip-text" title={tag}>
-                      {tag}
-                    </span>
+                    <span className="tag-chip-text" title={tag}>{tag}</span>
                   </button>
                 );
               })}
             </div>
           )}
-          <div className="notes-list-label">
-            {t.notesCount(filteredNotes.length)}
-          </div>
+          <div className="notes-list-label">{t.notesCount(filteredNotes.length)}</div>
           <div className="notes-list" style={{ flex: 1, minHeight: 0 }}>
             {filteredNotes.map((note) => (
               <button
@@ -806,31 +748,21 @@ export default function App() {
                 onClick={() => openNote(note.id)}
               >
                 <div className="note-item-title">{note.title}</div>
-                <div className="note-item-preview">
-                  {getPlainTextPreview(note.content, t) || t.noteEmpty}
-                </div>
+                <div className="note-item-preview">{getPlainTextPreview(note.content, t) || t.noteEmpty}</div>
                 {note.tags.length > 0 && (
                   <div className="sidebar-note-tags">
                     {note.tags.slice(0, 3).map((tag) => {
                       const [background, color] = getTagColor(tag, theme);
 
                       return (
-                        <span
-                          key={tag}
-                          className="tag-badge"
-                          style={{ background, color }}
-                        >
+                        <span key={tag} className="tag-badge" style={{ background, color }}>
                           <Icon name="tag" size={10} />
-                          <span className="tag-chip-text" title={tag}>
-                            {tag}
-                          </span>
+                          <span className="tag-chip-text" title={tag}>{tag}</span>
                         </span>
                       );
                     })}
                     {note.tags.length > 3 && (
-                      <span className="tag-badge tag-badge--more">
-                        +{note.tags.length - 3}
-                      </span>
+                      <span className="tag-badge tag-badge--more">+{note.tags.length - 3}</span>
                     )}
                   </div>
                 )}
@@ -850,10 +782,11 @@ export default function App() {
               </div>
             )}
           </div>
+
         </aside>
 
         <main className="main">
-          <div className={`topbar${showTopbarTitle ? "" : " actions-only"}`}>
+          <div className={`topbar${showTopbarTitle ? "" : " actions-only"}${editing ? " topbar-editing" : ""}`}>
             {showBackButton ? (
               <button
                 type="button"
@@ -887,11 +820,7 @@ export default function App() {
             {showTopbarTitle && (
               <div className="topbar-title-block">
                 <div className="topbar-title">
-                  {editing
-                    ? isNew
-                      ? t.noteEditorNew
-                      : t.noteEditorEdit
-                    : selectedNote?.title || "SmartNotebook"}
+                  {editing ? (isNew ? t.noteEditorNew : t.noteEditorEdit) : selectedNote?.title || "SmartNotebook"}
                 </div>
                 <div className="topbar-meta">
                   {editing || !selectedNote ? t.importHint : ""}
@@ -900,16 +829,8 @@ export default function App() {
             )}
 
             <div className="topbar-left">
-              <button
-                type="button"
-                className="btn-primary-inline btn-create-note topbar-left-button"
-                onClick={handleNew}
-                title={t.create}
-              >
-                <Icon name="plus" size={16} />{" "}
-                <span className="topbar-left-button-label">
-                  {!compactTopbar && t.createShort}
-                </span>
+              <button type="button" className="btn-primary-inline btn-create-note topbar-left-button" onClick={handleNew} title={t.create}>
+                <Icon name="plus" size={16} /> <span className="topbar-left-button-label">{!compactTopbar && t.createShort}</span>
               </button>
               <button
                 type="button"
@@ -923,22 +844,10 @@ export default function App() {
                 disabled={isImporting}
                 title={t.importShort}
               >
-                <Icon name="upload" size={16} />{" "}
-                <span className="topbar-left-button-label">
-                  {!compactTopbar &&
-                    (isImporting ? t.importInProgress : t.importShort)}
-                </span>
+                <Icon name="upload" size={16} /> <span className="topbar-left-button-label">{!compactTopbar && (isImporting ? t.importInProgress : t.importShort)}</span>
               </button>
-              <button
-                type="button"
-                className="btn-secondary topbar-left-button"
-                onClick={handleBackupExport}
-                title={t.backupExport}
-              >
-                <Icon name="download" size={16} />{" "}
-                <span className="topbar-left-button-label">
-                  {!compactTopbar && t.backupExport}
-                </span>
+              <button type="button" className="btn-secondary topbar-left-button" onClick={handleBackupExport} title={t.backupExport}>
+                <Icon name="download" size={16} /> <span className="topbar-left-button-label">{!compactTopbar && t.backupExport}</span>
               </button>
               <button
                 type="button"
@@ -947,10 +856,7 @@ export default function App() {
                 disabled={isRestoringBackup}
                 title={t.backupRestore}
               >
-                <Icon name="upload" size={16} />{" "}
-                <span className="topbar-left-button-label">
-                  {!compactTopbar && t.backupRestore}
-                </span>
+                <Icon name="upload" size={16} /> <span className="topbar-left-button-label">{!compactTopbar && t.backupRestore}</span>
               </button>
             </div>
 
@@ -996,12 +902,7 @@ export default function App() {
                         {t.exportPdf}
                       </button>
                     </div>
-                    <button
-                      type="button"
-                      className="btn-icon danger"
-                      onClick={handleDelete}
-                      title={t.delete}
-                    >
+                    <button type="button" className="btn-icon danger" onClick={handleDelete} title={t.delete}>
                       <Icon name="trash" />
                     </button>
                   </div>
@@ -1041,49 +942,23 @@ export default function App() {
                     <Icon name="settings" size={16} />
                   </button>
                   {isOptionsOpen ? (
-                    <div
-                      className="options-menu"
-                      role="menu"
-                      aria-label={t.optionsLabel}
-                    >
+                    <div className="options-menu" role="menu" aria-label={t.optionsLabel}>
                       <div className="options-section">
-                        <div className="options-section-label">
-                          {t.textSizeLabel}
-                        </div>
+                        <div className="options-section-label">{t.textSizeLabel}</div>
                         <FontSizeSwitch
                           value={noteFontSize}
-                          onChange={(value) =>
-                            setNoteFontSize(
-                              getConstrainedNoteFontSize(
-                                value,
-                                window.innerWidth,
-                              ),
-                            )
-                          }
+                          onChange={(value) => setNoteFontSize(getConstrainedNoteFontSize(value, window.innerWidth))}
                           t={t}
                           maxSize={maxNoteFontSize}
                         />
                       </div>
                       <div className="options-section">
-                        <div className="options-section-label">
-                          {t.languageLabel}
-                        </div>
-                        <LanguageSwitch
-                          language={language}
-                          onChange={setLanguage}
-                          t={t}
-                        />
+                        <div className="options-section-label">{t.languageLabel}</div>
+                        <LanguageSwitch language={language} onChange={setLanguage} t={t} />
                       </div>
                       <div className="options-section">
-                        <div className="options-section-label">
-                          {t.themeLabel}
-                        </div>
-                        <ThemeSwitch
-                          theme={theme}
-                          onChange={setTheme}
-                          t={t}
-                          compact={false}
-                        />
+                        <div className="options-section-label">{t.themeLabel}</div>
+                        <ThemeSwitch theme={theme} onChange={setTheme} t={t} compact={false} />
                       </div>
                     </div>
                   ) : null}
@@ -1092,10 +967,7 @@ export default function App() {
             </div>
           </div>
 
-          <div
-            className="content-area"
-            style={{ "--note-font-size": `${noteFontSize}px` }}
-          >
+          <div className="content-area" style={{ "--note-font-size": `${noteFontSize}px` }}>
             {errorMessage && (
               <div className="error-state">
                 <div className="error-banner">{errorMessage}</div>
@@ -1127,14 +999,9 @@ export default function App() {
             ) : filteredNotes.length === 0 ? (
               <div className="empty-state">
                 <div className="icon-wrap">
-                  <Icon
-                    name={notesList.length === 0 ? "book" : "search"}
-                    size={30}
-                  />
+                  <Icon name={notesList.length === 0 ? "book" : "search"} size={30} />
                 </div>
-                <h3>
-                  {notesList.length === 0 ? t.noNotesTitle : t.noResultsTitle}
-                </h3>
+                <h3>{notesList.length === 0 ? t.noNotesTitle : t.noResultsTitle}</h3>
                 <p>
                   {notesList.length === 0
                     ? t.noNotesDescription
