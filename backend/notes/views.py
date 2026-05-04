@@ -14,14 +14,14 @@ from django.core.files.storage import default_storage
 from django.db import connection, transaction
 from django.db.models import Count, Q
 from rest_framework import status, viewsets
+from rest_framework.throttling import UserRateThrottle
+from rest_framework.views import APIView
 
 logger = logging.getLogger("notes")
 from rest_framework.decorators import action
 from rest_framework.generics import CreateAPIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.throttling import UserRateThrottle
-from rest_framework.views import APIView
 
 from .models import Note, Tag
 from .pagination import NotePagination
@@ -47,8 +47,6 @@ except ImportError:
 
 
 class LinkPreviewThrottle(UserRateThrottle):
-    """Stricter throttle for the outbound-HTTP link preview action."""
-
     scope = "link_preview"
 
 
@@ -78,7 +76,7 @@ def extract_html_title(html: str) -> str:
 
 def fetch_link_preview(url: str) -> dict[str, str]:
     """Fetch a minimal Open Graph preview for a public HTTP or HTTPS URL."""
-    url = validate_public_fetch_url(url)
+    url, _pinned_ip = validate_public_fetch_url(url)
     parsed = urlparse(url)
 
     with open_public_url(
@@ -123,8 +121,14 @@ def decode_uploaded_text(uploaded_file) -> str:
     return raw_content.decode("utf-8-sig").strip()
 
 
-def validate_public_fetch_url(url: str) -> str:
-    """Reject localhost and non-public network targets for link previews."""
+def validate_public_fetch_url(url: str) -> tuple[str, str]:
+    """Reject localhost and non-public targets. Returns (url, pinned_ip).
+
+    Resolves the hostname once and validates all returned IPs.
+    The caller must connect to the returned pinned_ip directly to prevent
+    DNS rebinding attacks (where a hostname resolves to a public IP at
+    validation time then switches to a private IP at connection time).
+    """
     parsed = urlparse(url)
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
         raise ValueError("Enter a valid HTTP or HTTPS URL.")
@@ -158,7 +162,9 @@ def validate_public_fetch_url(url: str) -> str:
         if not ip_address(resolved).is_global:
             raise ValueError("Link preview is only available for public URLs.")
 
-    return url
+    # Pin one resolved IP so the connection always goes to the validated address
+    pinned_ip = next(iter(addresses))
+    return url, pinned_ip
 
 
 class NoRedirectHandler(HTTPRedirectHandler):
@@ -171,13 +177,23 @@ class NoRedirectHandler(HTTPRedirectHandler):
 def open_public_url(
     url: str, headers: dict[str, str], timeout: int = 5, max_redirects: int = 3
 ):
-    """Open a public URL while validating each redirect target."""
+    """Open a public URL while pinning the resolved IP to prevent DNS rebinding."""
     opener = build_opener(NoRedirectHandler())
     current_url = url
 
     for _ in range(max_redirects + 1):
-        validated_url = validate_public_fetch_url(current_url)
-        request = Request(validated_url, headers=headers)
+        validated_url, pinned_ip = validate_public_fetch_url(current_url)
+
+        # Replace hostname with the pinned IP in the request URL so the TCP
+        # connection goes to the address we already validated.
+        parsed = urlparse(validated_url)
+        port = parsed.port or (443 if parsed.scheme == "https" else 80)
+        pinned_netloc = (
+            f"[{pinned_ip}]:{port}" if ":" in pinned_ip else f"{pinned_ip}:{port}"
+        )
+        request_url = parsed._replace(netloc=pinned_netloc).geturl()
+
+        request = Request(request_url, headers={**headers, "Host": parsed.hostname})
 
         try:
             return opener.open(request, timeout=timeout)
@@ -357,7 +373,6 @@ class NoteViewSet(viewsets.ModelViewSet):
     def perform_destroy(self, instance):
         owner = instance.owner
         instance.delete()
-        # Clean up tags that no longer belong to any note for this owner
         Tag.objects.filter(owner=owner, notes__isnull=True).delete()
         rebuild_vectors_for_owner(owner)
 
@@ -492,14 +507,11 @@ class NoteViewSet(viewsets.ModelViewSet):
         notes_to_restore: list[dict[str, object]] = []
         all_tag_names: list[object] = []
 
-        # Enforce per-user note count before restoring
         current_count = Note.objects.filter(owner=request.user).count()
         available_slots = MAX_NOTES_PER_USER - current_count
         if available_slots <= 0:
             return Response(
-                {
-                    "error": f"Note limit reached. You can store up to {MAX_NOTES_PER_USER} notes."
-                },
+                {"error": f"Note limit reached ({MAX_NOTES_PER_USER})."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -508,26 +520,16 @@ class NoteViewSet(viewsets.ModelViewSet):
             if not isinstance(item, dict):
                 continue
             total_in_backup += 1
-
-            title = str(item.get("title") or "").strip()[:255]
-            if not title:
-                title = "Restored note"
-
-            content = str(item.get("content") or "")[:MAX_CONTENT_CHARS]
+            title = str(item.get("title") or "").strip()[:255] or "Restored note"
+            note_content = str(item.get("content") or "")[:MAX_CONTENT_CHARS]
             raw_tags = item.get("tags") or []
-            tag_names = raw_tags if isinstance(raw_tags, list) else []
             tag_names = [
                 str(t).strip().lower()[:MAX_TAG_NAME_LEN]
-                for t in tag_names
+                for t in (raw_tags if isinstance(raw_tags, list) else [])
                 if str(t).strip()
             ][:MAX_TAGS_PER_NOTE]
-
             notes_to_restore.append(
-                {
-                    "title": title,
-                    "content": content,
-                    "tag_names": tag_names,
-                }
+                {"title": title, "content": note_content, "tag_names": tag_names}
             )
             all_tag_names.extend(tag_names)
 
@@ -544,10 +546,7 @@ class NoteViewSet(viewsets.ModelViewSet):
                     title=str(item["title"]),
                     content=str(item["content"]),
                 )
-                tag_names = item["tag_names"]
-                tags = [
-                    tags_by_name[name] for name in tag_names if name in tags_by_name
-                ]
+                tags = [tags_by_name[n] for n in item["tag_names"] if n in tags_by_name]
                 if tags:
                     note.tags.set(tags)
                 restored_notes.append(note)
@@ -555,20 +554,18 @@ class NoteViewSet(viewsets.ModelViewSet):
         if restored_notes:
             rebuild_vectors_for_owner(request.user)
 
-        response_data: dict = {"restored": len(restored_notes)}
+        resp: dict = {"restored": len(restored_notes)}
         if skipped:
-            response_data["warning"] = (
-                f"{skipped} note(s) were not restored because you reached "
-                f"the {MAX_NOTES_PER_USER}-note limit."
+            resp["warning"] = (
+                f"{skipped} note(s) skipped — {MAX_NOTES_PER_USER}-note limit reached."
             )
             logger.info(
-                "Restore truncated for user %s: %d skipped of %d",
+                "Restore truncated user=%s skipped=%d total=%d",
                 request.user.id,
                 skipped,
                 total_in_backup,
             )
-
-        return Response(response_data, status=status.HTTP_201_CREATED)
+        return Response(resp, status=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=["post"], url_path="import")
     def import_note(self, request):
@@ -627,6 +624,12 @@ class NoteViewSet(viewsets.ModelViewSet):
         if not content:
             return Response(
                 {"error": "Imported file does not contain readable text."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if Note.objects.filter(owner=request.user).count() >= MAX_NOTES_PER_USER:
+            return Response(
+                {"error": f"Note limit reached ({MAX_NOTES_PER_USER})."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -718,8 +721,6 @@ class TagViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class HealthCheckView(APIView):
-    """Public liveness/readiness probe for Docker and load balancers."""
-
     permission_classes = [AllowAny]
     authentication_classes = []
 
@@ -730,37 +731,59 @@ class HealthCheckView(APIView):
         except Exception:
             db_ok = False
         payload = {"status": "ok" if db_ok else "degraded", "db": db_ok}
-        http_status = (
-            status.HTTP_200_OK if db_ok else status.HTTP_503_SERVICE_UNAVAILABLE
+        return Response(
+            payload,
+            status=status.HTTP_200_OK if db_ok else status.HTTP_503_SERVICE_UNAVAILABLE,
         )
-        return Response(payload, status=http_status)
 
 
 class LogoutView(APIView):
-    """Blacklist the provided refresh token, effectively logging the user out."""
-
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
         try:
             from rest_framework_simplejwt.tokens import RefreshToken
 
-            refresh_token = request.data.get("refresh")
-            if not refresh_token:
+            token = request.data.get("refresh")
+            if not token:
                 return Response(
-                    {"error": "refresh token is required."},
+                    {"error": "refresh token required."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-            token = RefreshToken(refresh_token)
-            token.blacklist()
-            return Response(
-                {"detail": "Successfully logged out."}, status=status.HTTP_200_OK
-            )
+            RefreshToken(token).blacklist()
+            return Response({"detail": "Logged out."}, status=status.HTTP_200_OK)
         except Exception:
             return Response(
-                {"error": "Invalid or already blacklisted token."},
-                status=status.HTTP_400_BAD_REQUEST,
+                {"error": "Invalid token."}, status=status.HTTP_400_BAD_REQUEST
             )
+
+
+class ProtectedMediaView(APIView):
+    """Serve media only to the owning user. In production use nginx X-Accel-Redirect."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, path):
+        import os
+        from django.http import FileResponse, Http404
+
+        parts = path.strip("/").split("/")
+        try:
+            if int(parts[0]) != request.user.id:
+                raise Http404
+        except (ValueError, IndexError):
+            raise Http404
+        full_path = os.path.join(settings.MEDIA_ROOT, path)
+        if not os.path.isfile(full_path):
+            raise Http404
+        if os.environ.get("MEDIA_USE_NGINX"):
+            from django.http import HttpResponse
+
+            r = HttpResponse()
+            r["X-Accel-Redirect"] = f"/protected-media/{path}"
+            r["Content-Type"] = ""
+            return r
+        return FileResponse(open(full_path, "rb"))
 
 
 class RegisterView(CreateAPIView):
@@ -772,13 +795,9 @@ class RegisterView(CreateAPIView):
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         if not serializer.is_valid():
-            # Return a generic error to avoid username enumeration
             return Response(
                 {"error": "Registration failed. Please check your input."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         self.perform_create(serializer)
-        return Response(
-            {"detail": "Account created successfully."},
-            status=status.HTTP_201_CREATED,
-        )
+        return Response({"detail": "Account created."}, status=status.HTTP_201_CREATED)
