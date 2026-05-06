@@ -209,6 +209,15 @@ CORS_ALLOWED_ORIGINS = env_list(
 DATABASES["default"]["CONN_MAX_AGE"] = env_int("DB_CONN_MAX_AGE", 60)
 
 # ── Structured JSON logging ───────────────────────────────────────────────────
+try:
+    import pythonjsonlogger  # noqa: F401
+
+    _JSON_LOGGER_AVAILABLE = True
+except ImportError:
+    _JSON_LOGGER_AVAILABLE = False
+
+_use_json = _JSON_LOGGER_AVAILABLE and not IS_TESTING
+
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
@@ -218,9 +227,9 @@ LOGGING = {
                 "()": "pythonjsonlogger.jsonlogger.JsonFormatter",
                 "format": "%(asctime)s %(levelname)s %(name)s %(message)s",
             }
-            if not IS_TESTING
+            if _use_json
             else {
-                "format": "%(levelname)s %(name)s: %(message)s",
+                "format": "%(asctime)s %(levelname)s %(name)s: %(message)s",
             }
         ),
     },
