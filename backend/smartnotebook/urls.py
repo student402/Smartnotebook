@@ -1,14 +1,14 @@
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
-from django.urls import include, path
+from django.urls import include, path, re_path
 from rest_framework.throttling import AnonRateThrottle
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
 )
 
-from notes.views import HealthCheckView, LogoutView, RegisterView
+from notes.views import HealthCheckView, LogoutView, ProtectedMediaView, RegisterView
 
 
 class AuthRateThrottle(AnonRateThrottle):
@@ -43,6 +43,10 @@ urlpatterns = [
     path("api/register/", ThrottledRegisterView.as_view(), name="register"),
     # Notes
     path("", include(("notes.urls", "notes"), namespace="notes")),
+    # Authenticated media: validates ownership before serving bytes
+    re_path(
+        r"^media/(?P<path>.+)$", ProtectedMediaView.as_view(), name="protected_media"
+    ),
 ]
 
 if settings.DEBUG:
