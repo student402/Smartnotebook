@@ -8,12 +8,17 @@ from ..models import Tag
 
 
 def normalize_tag_names(raw_tags: Iterable[object]) -> list[str]:
-    """Return unique, non-empty, lowercased tag names preserving first-seen order."""
+    """Return unique, non-empty, lowercased tag names preserving first-seen order.
+
+    Names are hard-capped at 64 characters (the DB column limit) as a last
+    line of defence, even if the serializer has already applied a tighter limit.
+    """
+    _DB_MAX = 64
     normalized_names: list[str] = []
     seen_names: set[str] = set()
 
     for raw_tag in raw_tags:
-        tag_name = str(raw_tag).strip().lower()
+        tag_name = str(raw_tag).strip().lower()[:_DB_MAX]
         if not tag_name or tag_name in seen_names:
             continue
         seen_names.add(tag_name)
