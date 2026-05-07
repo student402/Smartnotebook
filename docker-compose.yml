@@ -40,7 +40,7 @@ services:
       retries: 5
       start_period: 15s
     environment:
-      SECRET_KEY: "smartnotebook-dev-secret-key-min32bytes-padding!!"
+      SECRET_KEY: "smartnotebook-dev-secret-key"
       DEBUG: "True"
       ALLOWED_HOSTS: "127.0.0.1,localhost,backend"
       CORS_ALLOW_ALL_ORIGINS: "False"
@@ -91,7 +91,14 @@ services:
     volumes:
       - ./frontend:/frontend
       - frontend_node_modules:/frontend/node_modules
-    command: sh -c "corepack enable && corepack prepare pnpm@latest --activate && pnpm install && pnpm run dev -- --host 0.0.0.0"
+    command: sh -c "
+      corepack enable &&
+      corepack prepare pnpm@10.33.4 --activate &&
+      pnpm config set confirmModulesPurge false &&
+      pnpm config set onlyBuiltDependencies esbuild &&
+      pnpm install &&
+      pnpm run dev -- --host 0.0.0.0
+      "
     ports:
       - "5173:5173"
     depends_on:
@@ -99,6 +106,7 @@ services:
         condition: service_healthy
     environment:
       VITE_PROXY_TARGET: http://backend:8000
+      CI: "true"
 
 volumes:
   postgres_data:
