@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { loginUser, registerUser } from "./api";
+import { getErrorMessage } from "./utils/error";
 
 export default function Login({ onSuccess, onLogin, copy, language, onChangeLanguage, theme, onChangeTheme }) {
   const [mode, setMode] = useState("login");
@@ -12,7 +13,7 @@ export default function Login({ onSuccess, onLogin, copy, language, onChangeLang
 
   const handleLogin = async () => {
     try {
-      const res = await loginUser(username, password);
+      const res = await loginUser(username.trim(), password);
 
       localStorage.setItem("access", res.data.access);
       localStorage.setItem("refresh", res.data.refresh);
@@ -23,10 +24,12 @@ export default function Login({ onSuccess, onLogin, copy, language, onChangeLang
       } else if (typeof onLogin === "function") {
         onLogin();
       }
-    } catch {
+    } catch (error) {
       localStorage.removeItem("access");
       localStorage.removeItem("refresh");
-      setError(copy.authError);
+      setError(error?.response?.status === 401
+        ? copy.authError
+        : getErrorMessage(error, copy.connectionError || copy.authError));
       setSuccess("");
     }
   };
@@ -34,8 +37,8 @@ export default function Login({ onSuccess, onLogin, copy, language, onChangeLang
   const handleRegister = async () => {
     try {
       const res = await registerUser({
-        username,
-        email,
+        username: username.trim(),
+        email: email.trim(),
         password,
         password_confirm: passwordConfirm,
       });

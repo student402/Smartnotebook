@@ -479,6 +479,46 @@ class RegistrationTestCase(TestCase):
         self.assertIn("username", response.data)
 
 
+class TokenLoginTestCase(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user(
+            username="loginuser",
+            email="loginuser@example.com",
+            password="StrongPass123!",
+        )
+
+    def test_login_trims_username(self):
+        response = self.client.post(
+            "/api/token/",
+            {"username": "  loginuser  ", "password": "StrongPass123!"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("access", response.data)
+
+    def test_login_accepts_email(self):
+        response = self.client.post(
+            "/api/token/",
+            {"username": "loginuser@example.com", "password": "StrongPass123!"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("access", response.data)
+
+    def test_login_accepts_case_insensitive_username(self):
+        response = self.client.post(
+            "/api/token/",
+            {"username": "LoginUser", "password": "StrongPass123!"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("access", response.data)
+
+
 class ImportNoteTestCase(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="importer", password="pass")
