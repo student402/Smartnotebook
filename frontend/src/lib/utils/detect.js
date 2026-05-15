@@ -2,6 +2,10 @@ const LANGUAGE_KEY = "smartnotebook-language";
 const THEME_KEY = "smartnotebook-theme";
 const NOTE_FONT_SIZE_KEY = "smartnotebook-note-font-size";
 
+const getStoredValue = (key) => (
+  typeof localStorage === "undefined" ? null : localStorage.getItem(key)
+);
+
 export function getMaxNoteFontSize(viewportWidth) {
   if (viewportWidth <= 480) {
     return 24;
@@ -21,25 +25,33 @@ export function getConstrainedNoteFontSize(fontSize, viewportWidth = typeof wind
 }
 
 export function detectLanguage() {
-  const stored = localStorage.getItem(LANGUAGE_KEY);
+  const stored = getStoredValue(LANGUAGE_KEY);
   if (stored === "ru" || stored === "en") {
     return stored;
+  }
+
+  if (typeof navigator === "undefined") {
+    return "en";
   }
 
   return navigator.language?.toLowerCase().startsWith("ru") ? "ru" : "en";
 }
 
 export function detectTheme() {
-  const stored = localStorage.getItem(THEME_KEY);
+  const stored = getStoredValue(THEME_KEY);
   if (stored === "dark" || stored === "light") {
     return stored;
+  }
+
+  if (typeof window === "undefined") {
+    return "dark";
   }
 
   return window.matchMedia?.("(prefers-color-scheme: light)").matches ? "light" : "dark";
 }
 
 export function detectNoteFontSize() {
-  const stored = localStorage.getItem(NOTE_FONT_SIZE_KEY);
+  const stored = getStoredValue(NOTE_FONT_SIZE_KEY);
   if (stored) {
     const parsed = parseInt(stored, 10);
     if (!Number.isNaN(parsed) && parsed >= 16 && parsed <= 32) {

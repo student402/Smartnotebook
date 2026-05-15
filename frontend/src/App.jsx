@@ -29,6 +29,18 @@ const LANGUAGE_KEY = "smartnotebook-language";
 const THEME_KEY = "smartnotebook-theme";
 const NOTE_FONT_SIZE_KEY = "smartnotebook-note-font-size";
 
+const getViewportWidth = () => (typeof window === "undefined" ? 1280 : window.innerWidth);
+const hasStoredAccessToken = () => (
+  typeof localStorage !== "undefined" && Boolean(localStorage.getItem("access"))
+);
+const normalizeNote = (note) => ({
+  ...note,
+  title: note?.title ?? "",
+  content: note?.content ?? "",
+  tags: Array.isArray(note?.tags) ? note.tags : [],
+});
+const normalizeNotes = (value) => (Array.isArray(value) ? value : value?.results ?? []).map(normalizeNote);
+
 const UI_TEXT = {
   ru: {
     appSubtitle: "умный блокнот",
@@ -255,7 +267,7 @@ export default function App() {
   const [language, setLanguage] = useState(detectLanguage);
   const [theme, setTheme] = useState(detectTheme);
   const [noteFontSize, setNoteFontSize] = useState(detectNoteFontSize);
-  const [isAuthenticated, setIsAuthenticated] = useState(Boolean(localStorage.getItem("access")));
+  const [isAuthenticated, setIsAuthenticated] = useState(hasStoredAccessToken);
   const [selectedId, setSelectedId] = useState(null);
   const [editing, setEditing] = useState(false);
   const [isNew, setIsNew] = useState(false);
@@ -265,7 +277,8 @@ export default function App() {
   const [recommendations, setRecommendations] = useState([]);
   const [toast, setToast] = useState(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isMobile, setIsMobile] = useState(window.innerWidth <= MOBILE_BREAKPOINT);
+  const [viewportWidth, setViewportWidth] = useState(1280);
+  const [isMobile, setIsMobile] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [isRestoringBackup, setIsRestoringBackup] = useState(false);
@@ -274,11 +287,11 @@ export default function App() {
   const backupRestoreInputRef = useRef(null);
   const noteContentRef = useRef(null);
   const optionsMenuRef = useRef(null);
+  const optionsButtonRef = useRef(null);
   const toastTimer = useRef();
-  const draftTimer = useRef(null);
+  const checklistRequestRef = useRef(0);
 
   const t = UI_TEXT[language];
-  const normalizeNotes = (value) => (Array.isArray(value) ? value : value?.results ?? []);
   const clearRecommendations = useCallback(() => {
     setRecommendations([]);
   }, []);
@@ -288,19 +301,12 @@ export default function App() {
     clearRecommendations();
     setEditing(false);
     setIsNew(false);
-
-    if (draftTimer.current) {
-      clearTimeout(draftTimer.current);
-      draftTimer.current = null;
-    }
   }, [clearRecommendations]);
 
   const handleAuthenticationError = useCallback(() => {
     clearStoredTokens();
-    window.setTimeout(() => {
-      resetWorkspaceState();
-      setIsAuthenticated(false);
-    }, 0);
+    resetWorkspaceState();
+    setIsAuthenticated(false);
   }, [resetWorkspaceState]);
 
   const {
@@ -317,7 +323,7 @@ export default function App() {
   });
 
   const notesList = useMemo(() => normalizeNotes(notes), [notes]);
-  const maxNoteFontSize = getMaxNoteFontSize(typeof window !== "undefined" ? window.innerWidth : 1280);
+  const maxNoteFontSize = getMaxNoteFontSize(viewportWidth);
 
   const showToast = useCallback((message, type = "success") => {
     setToast({ message, type });
@@ -327,11 +333,9 @@ export default function App() {
 
   const handleSessionExpired = useCallback(() => {
     clearStoredTokens();
-    window.setTimeout(() => {
-      resetWorkspaceState();
-      setIsAuthenticated(false);
-      showToast(t.sessionExpired, "error");
-    }, 0);
+    resetWorkspaceState();
+    setIsAuthenticated(false);
+    showToast(t.sessionExpired, "error");
   }, [resetWorkspaceState, showToast, t.sessionExpired]);
 
   const handleSessionExpiring = useCallback(() => {
@@ -359,14 +363,17 @@ export default function App() {
 
   useEffect(() => {
     const handleResize = () => {
-      const mobile = window.innerWidth <= MOBILE_BREAKPOINT;
+      const width = getViewportWidth();
+      const mobile = width <= MOBILE_BREAKPOINT;
+      setViewportWidth(width);
       setIsMobile(mobile);
-      setNoteFontSize((currentSize) => getConstrainedNoteFontSize(currentSize, window.innerWidth));
+      setNoteFontSize((currentSize) => getConstrainedNoteFontSize(currentSize, width));
       if (!mobile) {
         setIsSidebarOpen(false);
       }
     };
 
+    handleResize();
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
@@ -376,14 +383,26 @@ export default function App() {
       return undefined;
     }
 
+    optionsMenuRef.current?.querySelector(".options-menu button")?.focus();
+
     const handlePointerDown = (event) => {
       if (!optionsMenuRef.current?.contains(event.target)) {
         setIsOptionsOpen(false);
       }
     };
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setIsOptionsOpen(false);
+        optionsButtonRef.current?.focus();
+      }
+    };
 
     document.addEventListener("mousedown", handlePointerDown);
-    return () => document.removeEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
   }, [isOptionsOpen]);
 
   useEffect(() => {
@@ -613,6 +632,8 @@ export default function App() {
         : line
     )).join("\n");
 
+    const requestId = checklistRequestRef.current + 1;
+    checklistRequestRef.current = requestId;
     const optimisticNote = { ...selectedNote, content: nextContent };
     setNotes((currentNotes) => normalizeNotes(currentNotes).map((note) => (
       note.id === selectedNote.id ? optimisticNote : note
@@ -624,10 +645,16 @@ export default function App() {
         content: nextContent,
         tags: selectedNote.tags,
       });
+      if (requestId !== checklistRequestRef.current) {
+        return;
+      }
       setNotes((currentNotes) => normalizeNotes(currentNotes).map((note) => (
         note.id === selectedNote.id ? response.data : note
       )));
     } catch (error) {
+      if (requestId !== checklistRequestRef.current) {
+        return;
+      }
       setNotes((currentNotes) => normalizeNotes(currentNotes).map((note) => (
         note.id === selectedNote.id ? selectedNote : note
       )));
@@ -661,16 +688,14 @@ export default function App() {
 
   if (!isAuthenticated) {
     return (
-      <>
-        <Login
-          language={language}
-          onChangeLanguage={setLanguage}
-          theme={theme}
-          onChangeTheme={setTheme}
-          onSuccess={() => setIsAuthenticated(true)}
-          copy={t}
-        />
-      </>
+      <Login
+        language={language}
+        onChangeLanguage={setLanguage}
+        theme={theme}
+        onChangeTheme={setTheme}
+        onSuccess={() => setIsAuthenticated(true)}
+        copy={t}
+      />
     );
   }
 
@@ -699,7 +724,7 @@ export default function App() {
         onClick={() => setIsSidebarOpen(false)}
       />
       <div className="app">
-        <aside className={`sidebar${isSidebarOpen ? " open" : ""}`} style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+        <aside className={`sidebar${isSidebarOpen ? " open" : ""}`}>
           <div className="sidebar-logo">
             <h1>
               <Icon name="book" size={20} />
@@ -739,7 +764,7 @@ export default function App() {
             </div>
           )}
           <div className="notes-list-label">{t.notesCount(filteredNotes.length)}</div>
-          <div className="notes-list" style={{ flex: 1, minHeight: 0 }}>
+          <div className="notes-list">
             {filteredNotes.map((note) => (
               <button
                 key={note.id}
@@ -932,6 +957,7 @@ export default function App() {
                 <div className="topbar-settings" ref={optionsMenuRef}>
                   <button
                     type="button"
+                    ref={optionsButtonRef}
                     className={`btn-icon options-button${isOptionsOpen ? " active" : ""}`}
                     onClick={() => setIsOptionsOpen((current) => !current)}
                     title={t.optionsLabel}
@@ -947,7 +973,7 @@ export default function App() {
                         <div className="options-section-label">{t.textSizeLabel}</div>
                         <FontSizeSwitch
                           value={noteFontSize}
-                          onChange={(value) => setNoteFontSize(getConstrainedNoteFontSize(value, window.innerWidth))}
+                          onChange={(value) => setNoteFontSize(getConstrainedNoteFontSize(value, viewportWidth))}
                           t={t}
                           maxSize={maxNoteFontSize}
                         />
