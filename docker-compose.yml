@@ -93,10 +93,8 @@ services:
       - frontend_node_modules:/frontend/node_modules
     command: sh -c "
       corepack enable &&
-      corepack prepare pnpm@10.33.4 --activate &&
-      pnpm config set confirmModulesPurge false &&
-      pnpm config set onlyBuiltDependencies esbuild &&
-      pnpm install &&
+      corepack prepare pnpm@10.33.2 --activate &&
+      pnpm install --config.confirmModulesPurge=false --config.onlyBuiltDependencies=esbuild &&
       pnpm run dev -- --host 0.0.0.0
       "
     ports:
@@ -106,6 +104,7 @@ services:
         condition: service_healthy
     environment:
       VITE_PROXY_TARGET: http://backend:8000
+      COREPACK_DEFAULT_TO_LATEST: "0"
       CI: "true"
 
 volumes:
