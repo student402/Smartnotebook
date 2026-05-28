@@ -438,32 +438,32 @@ export function NoteEditor({
 
   const tableOptions = [
     {
-      label: "Simple table",
+      label: t.tableSimple,
       type: "table",
       template: buildTableTemplate(2, 2),
     },
     {
-      label: "3 columns",
+      label: t.table3Columns,
       type: "table3x2",
       template: buildTableTemplate(3, 2),
     },
     {
-      label: "4 columns",
+      label: t.table4Columns,
       type: "table4x2",
       template: buildTableTemplate(4, 2),
     },
     {
-      label: "More rows",
+      label: t.tableMoreRows,
       type: "table2x4",
       template: buildTableTemplate(2, 4),
     },
     {
-      label: "Big table",
+      label: t.tableBig,
       type: "table4x4",
       template: buildTableTemplate(4, 4),
     },
     {
-      label: "Comparison table",
+      label: t.tableCompare,
       type: "tableCompare",
       template:
         "| Feature | Option A | Option B |\n| --- | --- | --- |\n| Pros | Good fit | Good fit |\n| Cons | Tradeoff | Tradeoff |\n| Notes | Comment | Comment |",
@@ -485,7 +485,7 @@ export function NoteEditor({
     ],
     [
       { label: "Code", type: "code" },
-      { label: "Table", type: "tableMenu" },
+      { label: t.tableMenuLabel, type: "tableMenu" },
       { label: "Link", type: "link" },
       { label: t.insertImage, type: "image" },
       { label: "Divider", type: "hr" },
@@ -789,7 +789,7 @@ export function NoteEditor({
                     onClick={() => appendTableRowAtLine(activeTableLine)}
                   >
                     <span className="note-table-tool-plus">+</span>
-                    Row
+                    {t.tableRow}
                   </button>
                   <button
                     type="button"
@@ -797,7 +797,7 @@ export function NoteEditor({
                     onClick={() => appendTableColumnAtLine(activeTableLine)}
                   >
                     <span className="note-table-tool-plus">+</span>
-                    Column
+                    {t.tableColumn}
                   </button>
                 </div>
               ) : null}

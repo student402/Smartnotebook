@@ -69,7 +69,8 @@ export default function Login({ onSuccess, onLogin, copy, language, onChangeLang
     }
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = (event) => {
+    event?.preventDefault();
     if (mode === "login") {
       handleLogin();
       return;
@@ -147,11 +148,13 @@ export default function Login({ onSuccess, onLogin, copy, language, onChangeLang
             </div>
           </div>
 
-          <div className="login-form">
+          <form className="login-form" onSubmit={handleSubmit}>
             <div className="login-field">
               <label htmlFor="username">{copy.username}</label>
               <input
                 id="username"
+                name="username"
+                autoComplete="username"
                 placeholder={copy.username}
                 value={username}
                 onChange={(event) => {
@@ -166,7 +169,9 @@ export default function Login({ onSuccess, onLogin, copy, language, onChangeLang
                 <label htmlFor="email">{copy.emailOptional}</label>
                 <input
                   id="email"
+                  name="email"
                   type="email"
+                  autoComplete="email"
                   placeholder={copy.emailOptional}
                   value={email}
                   onChange={(event) => {
@@ -181,7 +186,9 @@ export default function Login({ onSuccess, onLogin, copy, language, onChangeLang
               <label htmlFor="password">{copy.password}</label>
               <input
                 id="password"
+                name="password"
                 type="password"
+                autoComplete={mode === "login" ? "current-password" : "new-password"}
                 placeholder={copy.password}
                 value={password}
                 onChange={(event) => {
@@ -196,7 +203,9 @@ export default function Login({ onSuccess, onLogin, copy, language, onChangeLang
                 <label htmlFor="password-confirm">{copy.confirmPassword}</label>
                 <input
                   id="password-confirm"
+                  name="password-confirm"
                   type="password"
+                  autoComplete="new-password"
                   placeholder={copy.confirmPassword}
                   value={passwordConfirm}
                   onChange={(event) => {
@@ -206,23 +215,22 @@ export default function Login({ onSuccess, onLogin, copy, language, onChangeLang
                 />
               </div>
             )}
-          </div>
-
-          <div className="login-actions">
-            <button type="button" className="btn-primary-inline" onClick={handleSubmit}>
-              {mode === "login" ? copy.loginButton : copy.registerButton}
-            </button>
-            <button
-              type="button"
-              className="btn-secondary"
-              onClick={() => {
-                setMode(mode === "login" ? "register" : "login");
-                resetMessages();
-              }}
-            >
-              {mode === "login" ? copy.switchToRegister : copy.switchToLogin}
-            </button>
-          </div>
+            <div className="login-actions">
+              <button type="submit" className="btn-primary-inline">
+                {mode === "login" ? copy.loginButton : copy.registerButton}
+              </button>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => {
+                  setMode(mode === "login" ? "register" : "login");
+                  resetMessages();
+                }}
+              >
+                {mode === "login" ? copy.switchToRegister : copy.switchToLogin}
+              </button>
+            </div>
+          </form>
 
           {error && <div className="login-status error">{error}</div>}
           {success && <div className="login-status success">{success}</div>}

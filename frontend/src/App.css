@@ -345,6 +345,34 @@
     text-overflow: ellipsis;
   }
 
+  .note-item-rich-preview {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 7px;
+    color: var(--text-muted);
+    font-size: 11px;
+    line-height: 1.35;
+    overflow: hidden;
+    max-height: 64px;
+  }
+
+  .note-item-rich-preview > * {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .note-item-rich-preview .rp-badge {
+    font-size: 10px;
+    padding: 1px 7px;
+  }
+
    .note-item-date {
      display: flex;
      align-items: center;
@@ -441,21 +469,23 @@
   }
 
   .topbar.topbar-editing {
-    position: relative;
+    justify-content: flex-start;
   }
 
-  /* Title block centered absolutely so it doesn't affect flex flow */
   .topbar.topbar-editing .topbar-title-block {
-    position: absolute;
-    left: 50%;
-    transform: translateX(-50%);
-    text-align: center;
-    pointer-events: none;
-    flex: none;
+    position: static;
+    transform: none;
+    text-align: left;
+    pointer-events: auto;
+    flex: 1 1 240px;
     width: auto;
+    max-width: 420px;
   }
 
-  /* Buttons pushed flush right — before the settings icon */
+  .topbar.topbar-editing .topbar-meta {
+    display: none;
+  }
+
   .topbar.topbar-editing .topbar-left {
     flex: 0 0 auto;
     border-right: 1px solid var(--border);
@@ -463,7 +493,6 @@
     margin-left: auto;
   }
 
-  /* topbar-right loses its own auto margin — topbar-left handles it */
   .topbar.topbar-editing .topbar-right {
     margin-left: 0;
     padding-left: 0;
@@ -494,9 +523,9 @@
   }
 
   .note-view .topbar-meta {
-    margin-top: 0;
+    margin-top: calc(var(--note-font-size, 18px) * 0.66);
     margin-right: 8px;
-    color: rgba(255, 255, 255, 0.65);
+    color: rgba(255, 255, 255, 0.78);
   }
 
   body[data-theme="light"] .note-view .topbar-meta {
@@ -897,9 +926,9 @@
   .editor-wrap {
     display: flex;
     flex-direction: column;
-    flex: 1;
+    flex: 0 0 auto;
     min-height: 0;
-    height: 100%;
+    height: auto;
   }
 
   .note-view-header {
@@ -1030,6 +1059,12 @@
   .sidebar-note-tags .tag-badge,
   .sidebar-tags .tag-filter {
     font-size: 10px;
+  }
+
+  .main-list-card .tag-badge,
+  .grid-card .tag-badge {
+    font-size: 10px;
+    padding: 4px 8px;
   }
 
   .note-markdown {
@@ -1550,6 +1585,7 @@
     background: rgba(23, 23, 31, 0.92);
     color: inherit;
     cursor: pointer;
+    text-align: left;
     padding: 20px;
     display: flex;
     flex-direction: column;
@@ -1886,7 +1922,7 @@
   .editor-field.content-field {
     display: flex;
     flex-direction: column;
-    flex: 1;
+    flex: 0 0 auto;
     min-height: 0;
     margin-bottom: 0;
     padding-bottom: 10px;
@@ -1933,9 +1969,9 @@
   }
 
   .editor-textarea {
-    flex: 1;
+    flex: 0 0 auto;
     min-height: 300px;
-    height: 100%;
+    height: clamp(320px, 46vh, 560px);
     resize: none;
     line-height: 1.75;
     overflow-anchor: none;
@@ -1949,8 +1985,9 @@
   }
 
   .editor-preview {
-    flex: 1;
-    min-height: 0;
+    flex: 0 0 auto;
+    min-height: 320px;
+    max-height: 560px;
     padding: 16px 18px;
     border: 1px solid var(--border);
     border-radius: 12px;
@@ -2014,6 +2051,8 @@
     flex-wrap: wrap;
     padding-top: 8px;
     flex: 0 0 auto;
+    position: relative;
+    z-index: 1;
   }
 
   .btn-new,
@@ -2180,6 +2219,36 @@
     border-radius: 14px;
     background: var(--surface2);
     box-shadow: var(--shadow);
+    max-width: min(420px, calc(100vw - 32px));
+  }
+
+  .toast-icon,
+  .toast-message {
+    min-width: 0;
+  }
+
+  .toast-message {
+    overflow-wrap: anywhere;
+  }
+
+  .toast-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    margin-left: 4px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--text-muted);
+    cursor: pointer;
+    line-height: 1;
+  }
+
+  .toast-close:hover {
+    color: var(--text);
+    border-color: var(--border-hover);
   }
 
   .toast.success {
@@ -2366,6 +2435,16 @@
 
   .login-field input:focus {
     border-color: var(--accent2);
+  }
+
+  .login-field input:-webkit-autofill,
+  .login-field input:-webkit-autofill:hover,
+  .login-field input:-webkit-autofill:focus {
+    border-color: var(--accent2);
+    -webkit-text-fill-color: var(--text);
+    caret-color: var(--text);
+    box-shadow: 0 0 0 1000px var(--surface2) inset;
+    transition: background-color 9999s ease-out;
   }
 
   .login-actions {
@@ -2798,7 +2877,7 @@
     }
 
     .note-title-display {
-      font-size: min(calc(var(--note-font-size, 15px) * 2.5), 30px);
+      font-size: clamp(34px, calc(var(--note-font-size, 18px) * 1.9), 52px);
     }
 
     .grid-card-footer,

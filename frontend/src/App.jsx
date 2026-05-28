@@ -17,7 +17,7 @@ import { detectLanguage, detectNoteFontSize, detectTheme, getConstrainedNoteFont
 import { formatDate } from "./lib/utils/date";
 import { getErrorMessage } from "./lib/utils/error";
 import { exportNoteAsMarkdown, exportNoteAsPdf, exportNoteAsTxt, triggerDownload } from "./lib/utils/export";
-import { getPlainTextPreview } from "./lib/utils/preview";
+import { getPlainTextPreview, getRichPreview } from "./lib/utils/preview";
 import { getTagColor } from "./lib/utils/tagColor";
 import { useNotes } from "./lib/hooks/useNotes";
 import { useSession } from "./lib/hooks/useSession";
@@ -33,6 +33,43 @@ const getViewportWidth = () => (typeof window === "undefined" ? 1280 : window.in
 const hasStoredAccessToken = () => (
   typeof localStorage !== "undefined" && Boolean(localStorage.getItem("access"))
 );
+
+function SidebarPreview({ content, t }) {
+  const blocks = getRichPreview(content, t, 60).slice(0, 3);
+  if (blocks.length === 0) {
+    return <div className="note-item-preview">{getPlainTextPreview(content, t) || t.noteEmpty}</div>;
+  }
+
+  return (
+    <div className="note-item-rich-preview">
+      {blocks.map((block, index) => {
+        if (block.type === "table") {
+          return <span key={index} className="rp-badge rp-badge--table">⊞ table</span>;
+        }
+        if (block.type === "image") {
+          return <span key={index} className="rp-badge rp-badge--media">▣ image</span>;
+        }
+        if (block.type === "heading") {
+          return (
+            <span key={index} className="rp-heading">
+              <span className="rp-heading-marker">H{block.level}</span>
+              {block.text}
+            </span>
+          );
+        }
+        if (block.type === "code") {
+          return <span key={index} className="rp-badge rp-badge--code">{"{ }"} code</span>;
+        }
+
+        return (
+          <span key={index} className="rp-text">
+            {block.text || t.noteEmpty}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
 const normalizeNote = (note) => ({
   ...note,
   title: note?.title ?? "",
@@ -150,6 +187,15 @@ const UI_TEXT = {
     imageUploadError: "Не удалось загрузить изображение",
     imageDropHint: "Перетащите изображение сюда или используйте кнопку вставки изображения.",
     imageOnlyPreview: "🖼 Изображение",
+    tableRow: "Строка",
+    tableColumn: "Столбец",
+    tableMenuLabel: "Таблица",
+    tableSimple: "Простая таблица",
+    table3Columns: "3 столбца",
+    table4Columns: "4 столбца",
+    tableMoreRows: "Больше строк",
+    tableBig: "Большая таблица",
+    tableCompare: "Сравнение",
   },
   en: {
     appSubtitle: "smart notebook",
@@ -259,6 +305,15 @@ const UI_TEXT = {
     imageUploadError: "Could not upload image",
     imageDropHint: "Drop an image here or use the insert image button.",
     imageOnlyPreview: "🖼 Image",
+    tableRow: "Row",
+    tableColumn: "Column",
+    tableMenuLabel: "Table",
+    tableSimple: "Simple table",
+    table3Columns: "3 columns",
+    table4Columns: "4 columns",
+    tableMoreRows: "More rows",
+    tableBig: "Big table",
+    tableCompare: "Comparison table",
   },
 };
 
@@ -329,6 +384,11 @@ export default function App() {
     setToast({ message, type });
     window.clearTimeout(toastTimer.current);
     toastTimer.current = window.setTimeout(() => setToast(null), 3200);
+  }, []);
+
+  const dismissToast = useCallback(() => {
+    window.clearTimeout(toastTimer.current);
+    setToast(null);
   }, []);
 
   const handleSessionExpired = useCallback(() => {
@@ -693,7 +753,10 @@ export default function App() {
         onChangeLanguage={setLanguage}
         theme={theme}
         onChangeTheme={setTheme}
-        onSuccess={() => setIsAuthenticated(true)}
+        onSuccess={() => {
+          dismissToast();
+          setIsAuthenticated(true);
+        }}
         copy={t}
       />
     );
@@ -773,7 +836,7 @@ export default function App() {
                 onClick={() => openNote(note.id)}
               >
                 <div className="note-item-title">{note.title}</div>
-                <div className="note-item-preview">{getPlainTextPreview(note.content, t) || t.noteEmpty}</div>
+                <SidebarPreview content={note.content} t={t} />
                 {note.tags.length > 0 && (
                   <div className="sidebar-note-tags">
                     {note.tags.slice(0, 3).map((tag) => {
@@ -1076,9 +1139,19 @@ export default function App() {
       </div>
 
       {toast && (
-        <div className={`toast ${toast.type}`}>
-          {toast.type === "success" ? <Icon name="check" size={15} /> : "!"}
-          {toast.message}
+        <div className={`toast ${toast.type}`} role="status">
+          <span className="toast-icon">
+            {toast.type === "success" ? <Icon name="check" size={15} /> : "!"}
+          </span>
+          <span className="toast-message">{toast.message}</span>
+          <button
+            type="button"
+            className="toast-close"
+            onClick={dismissToast}
+            aria-label="Close notification"
+          >
+            x
+          </button>
         </div>
       )}
     </>

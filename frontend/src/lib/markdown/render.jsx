@@ -4,8 +4,9 @@ import { parseChecklistLine } from "./checklist";
 import { getStandaloneLinkData } from "./links";
 import { normalizeCodeLanguage, renderHighlightedCode } from "./highlight.jsx";
 import { isTableSeparator, splitTableRow } from "./table";
-import { LinkPreviewCard } from "../../components/media/LinkPreviewCard";
-import { YouTubePreview } from "../../components/media/YouTubePreview";
+import { LinkPreviewCard } from "../../components/previews/LinkPreviewCard";
+import { YouTubePreview } from "../../components/previews/YouTubePreview";
+import { AuthenticatedImage } from "../../components/notes/AuthenticatedImage";
 
 export function renderMarkdown(content, options = {}) {
   if (!content?.trim()) {
@@ -55,7 +56,7 @@ export function renderMarkdown(content, options = {}) {
     if (standaloneLink?.type === "image") {
       blocks.push(
         <figure key={`image-${blocks.length}`} className="note-media-block">
-          <img
+          <AuthenticatedImage
             src={standaloneLink.url}
             alt={standaloneLink.alt || ""}
             className="note-block-image"

@@ -1,4 +1,5 @@
 import { normalizeUrl } from "../utils/url";
+import { AuthenticatedImage } from "../../components/notes/AuthenticatedImage";
 
 export function renderInlineMarkdown(text, keyPrefix = "inline") {
   const nodes = [];
@@ -14,7 +15,7 @@ export function renderInlineMarkdown(text, keyPrefix = "inline") {
     if (match[2] !== undefined && match[3]) {
       const imageSrc = normalizeUrl(match[3]);
       nodes.push(
-        <img
+        <AuthenticatedImage
           key={`${keyPrefix}-${match.index}`}
           src={imageSrc}
           alt={match[2] || ""}

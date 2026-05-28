@@ -1,7 +1,7 @@
 export function FontSizeSwitch({ value, onChange, t, maxSize = 32 }) {
   const minSize = 16;
   const maxSizeValue = maxSize;
-  const step = 4;
+  const step = 2;
 
   const decrease = () => {
     const newSize = Math.max(minSize, value - step);
