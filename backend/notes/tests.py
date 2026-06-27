@@ -957,6 +957,16 @@ class ReindexNoteVectorsCommandTestCase(TestCase):
         self.assertIn("Reindexed 2 notes across 1 owners.", output.getvalue())
 
 
+VALID_PNG_BYTES = (
+    b"\x89PNG\r\n\x1a\n"
+    b"\x00\x00\x00\rIHDR"
+    b"\x00\x00\x00\x01\x00\x00\x00\x01"
+    b"\x08\x02\x00\x00\x00\x90wS\xde"
+    b"\x00\x00\x00\x0cIDATx\x9cc```\x00\x00\x00\x04\x00\x01"
+    b"\xf6\x178U\x00\x00\x00\x00IEND\xaeB`\x82"
+)
+
+
 class UploadImageTestCase(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="image-user", password="pass")
@@ -966,14 +976,7 @@ class UploadImageTestCase(TestCase):
     def test_upload_image_returns_media_url(self):
         uploaded = SimpleUploadedFile(
             "photo.png",
-            (
-                b"\x89PNG\r\n\x1a\n"
-                b"\x00\x00\x00\rIHDR"
-                b"\x00\x00\x00\x01\x00\x00\x00\x01"
-                b"\x08\x02\x00\x00\x00\x90wS\xde"
-                b"\x00\x00\x00\x0cIDAT\x08\x99c`\x00\x00\x00\x02\x00\x01"
-                b"\xe2!\xbc3\x00\x00\x00\x00IEND\xaeB`\x82"
-            ),
+            VALID_PNG_BYTES,
             content_type="image/png",
         )
 
@@ -997,14 +1000,7 @@ class UploadImageTestCase(TestCase):
     def test_upload_image_rejects_mismatched_extension(self):
         uploaded = SimpleUploadedFile(
             "photo.gif",
-            (
-                b"\x89PNG\r\n\x1a\n"
-                b"\x00\x00\x00\rIHDR"
-                b"\x00\x00\x00\x01\x00\x00\x00\x01"
-                b"\x08\x02\x00\x00\x00\x90wS\xde"
-                b"\x00\x00\x00\x0cIDAT\x08\x99c`\x00\x00\x00\x02\x00\x01"
-                b"\xe2!\xbc3\x00\x00\x00\x00IEND\xaeB`\x82"
-            ),
+            VALID_PNG_BYTES,
             content_type="image/png",
         )
 
@@ -1017,14 +1013,7 @@ class UploadImageTestCase(TestCase):
     def test_upload_image_normalizes_windows_storage_path(self, mocked_save):
         uploaded = SimpleUploadedFile(
             "photo.png",
-            (
-                b"\x89PNG\r\n\x1a\n"
-                b"\x00\x00\x00\rIHDR"
-                b"\x00\x00\x00\x01\x00\x00\x00\x01"
-                b"\x08\x02\x00\x00\x00\x90wS\xde"
-                b"\x00\x00\x00\x0cIDAT\x08\x99c`\x00\x00\x00\x02\x00\x01"
-                b"\xe2!\xbc3\x00\x00\x00\x00IEND\xaeB`\x82"
-            ),
+            VALID_PNG_BYTES,
             content_type="image/png",
         )
 

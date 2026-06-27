@@ -24,8 +24,10 @@ export function renderInlineMarkdown(text, keyPrefix = "inline") {
         />
       );
     } else if (match[4] && match[5]) {
+      const href = match[5];
+      const safeProtocols = /^(https?|mailto|ftp):/i;
       nodes.push(
-        <a key={`${keyPrefix}-${match.index}`} href={match[5]} target="_blank" rel="noreferrer">
+        <a key={`${keyPrefix}-${match.index}`} href={safeProtocols.test(href) ? href : "#"} target="_blank" rel="noreferrer">
           {match[4]}
         </a>
       );

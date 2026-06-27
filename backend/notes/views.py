@@ -1,3 +1,4 @@
+import io
 import json
 import logging
 import re
@@ -10,9 +11,11 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 from uuid import uuid4
 
 from django.conf import settings
+from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.db import connection, transaction
 from django.db.models import Count, Q
+from PIL import Image
 from rest_framework import status, viewsets
 from rest_framework.throttling import UserRateThrottle
 from rest_framework.views import APIView
@@ -694,8 +697,34 @@ class NoteViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         suffix = suffix or canonical_extension
+
+        image_data = uploaded_file.read()
+        try:
+            with Image.open(io.BytesIO(image_data)) as img:
+                img.load()
+                cleaned = io.BytesIO()
+                if _image_type == "jpeg" and img.mode not in ("RGB", "L"):
+                    img = img.convert("RGB")
+                img.save(
+                    cleaned,
+                    format={
+                        "jpeg": "JPEG",
+                        "png": "PNG",
+                        "gif": "GIF",
+                        "webp": "WEBP",
+                        "bmp": "BMP",
+                    }[_image_type],
+                    exif=b"",
+                )
+                processed_file = ContentFile(cleaned.getvalue())
+        except Exception:
+            return Response(
+                {"error": "Image processing failed."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         filename = f"note-images/{request.user.id}/{uuid4().hex}{suffix}"
-        saved_path = default_storage.save(filename, uploaded_file)
+        saved_path = default_storage.save(filename, processed_file)
         media_url = (
             settings.MEDIA_URL
             if settings.MEDIA_URL.endswith("/")
@@ -773,7 +802,15 @@ class ProtectedMediaView(APIView):
                 raise Http404
         except (ValueError, IndexError):
             raise Http404
-        full_path = os.path.join(settings.MEDIA_ROOT, path)
+
+        # Нормализуем путь и проверяем, что он остаётся внутри MEDIA_ROOT/<user_id>/
+        full_path = os.path.normpath(os.path.join(settings.MEDIA_ROOT, path))
+        expected_prefix = os.path.normpath(
+            os.path.join(settings.MEDIA_ROOT, str(request.user.id))
+        )
+        if not full_path.startswith(expected_prefix + os.sep) and full_path != expected_prefix:
+            raise Http404
+
         if not os.path.isfile(full_path):
             raise Http404
         if os.environ.get("MEDIA_USE_NGINX"):

@@ -41,7 +41,7 @@ def get_secret_key(is_testing: bool) -> str:
         return secret_key
 
     if is_testing:
-        return "django-test-secret-key"
+        return "django-test-secret-key-0123456789012345678"
 
     raise ImproperlyConfigured("Set SECRET_KEY in the environment.")
 
@@ -83,6 +83,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "notes.middleware.ContentSecurityPolicyMiddleware",
 ]
 
 ROOT_URLCONF = "smartnotebook.urls"
@@ -197,6 +198,11 @@ CSRF_COOKIE_SECURE = env_flag("CSRF_COOKIE_SECURE", not DEBUG)
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_REFERRER_POLICY = "same-origin"
 X_FRAME_OPTIONS = "DENY"
+
+SECURE_HSTS_SECONDS = env_int("SECURE_HSTS_SECONDS", 0 if DEBUG else 31536000)
+SECURE_HSTS_INCLUDE_SUBDOMAINS = env_flag("SECURE_HSTS_INCLUDE_SUBDOMAINS", not DEBUG)
+SECURE_HSTS_PRELOAD = env_flag("SECURE_HSTS_PRELOAD", not DEBUG)
+CSP_ENABLED = env_flag("CSP_ENABLED", True)
 
 CORS_ALLOW_ALL_ORIGINS = env_flag("CORS_ALLOW_ALL_ORIGINS", False)
 CORS_ALLOWED_ORIGINS = env_list(
